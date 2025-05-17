@@ -5,29 +5,93 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
     <title>Portrait Only PWA</title>
 
+    <!-- Apple Web App Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="PortraitApp">
+    <link rel="apple-touch-icon" href="./images/icon-180x180.png">
 
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="./images/icon-180x180.png">
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f0f0f0;
+            color: #333;
+            overscroll-behavior-y: contain;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .permission-section, .sensor-data, .logs {
+            padding: 15px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .permission-section {
+            text-align: center;
+        }
+        .permission-section button {
+             padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        .permission-section button:hover {
+            background-color: #0056b3;
+        }
+        .sensor-data h2, .logs h2 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+            text-align: center;
+        }
+        .sensor-data p {
+            margin: 5px 0;
+        }
+        .logs .log-area {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            font-size: 0.8em;
+            background-color: #f9f9f9;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .log-entry.error { color: red; font-weight: bold; }
+        .log-entry.warn { color: orange; }
+        .hidden { display: none; }
+    </style>
 </head>
 <body>
-    <h1>Hello, base PWA!</h1>
+    <div class="container">
+        <h1>PWA with Device Orientation Sensor</h1>
 
-    <div>
-        <h2>Device Orientation Data (includes magnetic info)</h2>
-        <button id="request-sensor-permission">Enable Sensor Access</button>
-        <p>Alpha (Compass): <span id="orientation-alpha">N/A</span></p>
-        <p>Beta (Tilt Front/Back): <span id="orientation-beta">N/A</span></p>
-        <p>Gamma (Tilt Left/Right): <span id="orientation-gamma">N/A</span></p>
-        <p id="orientation-error" style="color: red;"></p>
-    </div>
+        <div id="permissionSection" class="permission-section">
+            <p>This app requires access to your device's orientation sensors to display data (includes magnetic north).</p>
+            <button id="requestPermissionButton">Grant Orientation Sensor Access</button>
+        </div>
 
-    <div style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px;">
-        <h2>Application Log</h2>
-        <div id="app-log" style="height: 200px; overflow-y: scroll; border: 1px solid #eee; padding: 10px; font-size: 0.9em; white-space: pre-wrap; word-wrap: break-word;">
-            <!-- Log messages will appear here -->
+        <div id="sensorDataSection" class="sensor-data hidden">
+            <h2>Device Orientation Data (includes magnetic north)</h2>
+            <p>Alpha (&alpha; - Compass): <span id="orientation-alpha">N/A</span></p>
+            <p>Beta (&beta; - Tilt Front/Back): <span id="orientation-beta">N/A</span></p>
+            <p>Gamma (&gamma; - Tilt Left/Right): <span id="orientation-gamma">N/A</span></p>
+            <p id="sensor-error" style="color: red;"></p>
+        </div>
+
+        <div class="logs">
+            <h2>Application Log</h2>
+            <div id="logArea" class="log-area"></div>
         </div>
     </div>
 
