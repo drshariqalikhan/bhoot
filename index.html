@@ -2,70 +2,73 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Compass Visualizer</title>
+    <title>Raw Orientation Sensor Data</title>
 
     <!-- Apple Web App Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
             margin: 0;
-            padding: 10px;
+            padding: 20px; /* More padding for content */
             background-color: #f0f0f0;
             color: #333;
             overscroll-behavior-y: contain;
+            font-size: 16px;
         }
         .container {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 20px; /* Increased gap */
         }
-        .permission-section, .calibration-notice, .compass-display {
-            text-align: center;
+        .permission-section, .sensor-values-display {
+            text-align: left; /* Align text left for readability */
             padding: 20px;
             background-color: #fff;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .permission-section {
+            text-align: center; /* Keep permission button centered */
+        }
+        .sensor-values-display h2 {
+            margin-top: 0;
+            font-size: 1.4em;
+            color: #007bff;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
             margin-bottom: 15px;
         }
-        .compass-display h2 {
-            margin-top: 0;
-            font-size: 1.5em;
+        .sensor-value-item {
+            margin-bottom: 12px; /* Space between items */
+            display: flex; /* For aligning label and value */
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px dashed #f0f0f0;
         }
-        .compass-display p {
-            font-size: 2em;
+        .sensor-value-item:last-child {
+            border-bottom: none;
+        }
+        .sensor-value-item strong {
+            color: #555;
+            margin-right: 10px;
+            min-width: 200px; /* Ensure labels align nicely */
+        }
+        .sensor-value-item span {
+            font-family: "SF Mono", "Menlo", "Monaco", "Consolas", "Liberation Mono", "Courier New", monospace;
             font-weight: bold;
-            color: #007bff;
-            margin: 5px 0;
+            color: #333;
+            word-break: break-all; /* Prevent long numbers from breaking layout */
         }
-        .controls {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            padding: 15px;
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .controls label {
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        .controls select, .controls button, .controls input[type="range"] {
-            padding: 10px;
+        .controls button { /* Style for permission button */
+            padding: 12px 20px;
             border-radius: 5px;
-            border: 1px solid #ccc;
+            border: none;
             font-size: 1em;
-            box-sizing: border-box;
-        }
-        .controls input[type="range"] {
-            padding: 0;
-        }
-        .controls button {
             background-color: #007bff;
             color: white;
             cursor: pointer;
@@ -73,60 +76,48 @@
         .controls button:hover {
             background-color: #0056b3;
         }
-        .controls button.active {
-            background-color: #28a745;
-        }
-        .slider-container { display: flex; flex-direction: column; gap: 5px; }
-        .slider-container span { font-size: 0.9em; text-align: center; }
-        .chart-container { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .chart-container h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.2em; text-align: center; }
         .logs { margin-top: 20px; background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .logs h3 { margin-top: 0; }
         .log-area { max-height: 150px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; font-size: 0.8em; background-color: #f9f9f9; white-space: pre-wrap; }
         .log-entry.error { color: red; font-weight: bold; }
         .log-entry.warn { color: orange; }
         .log-entry.debug { color: blue; }
+        .log-entry.info { color: green; }
         .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Compass Visualizer</h1>
+        <h1>Raw Device Orientation Data</h1>
 
         <div id="permissionSection" class="permission-section">
-            <p>This app requires access to your device's orientation sensors for compass data.</p>
-            <button id="requestPermissionButton">Grant Orientation Sensor Access</button>
-        </div>
-
-        <div id="compassDisplay" class="compass-display hidden">
-            <h2>Current Raw Compass Heading</h2>
-            <p id="rawCompassValue">--- °</p>
-        </div>
-
-        <div id="calibrationNotice" class="calibration-notice hidden">
-            <p id="calibrationText">Initializing compass calibration...</p>
-        </div>
-
-        <div id="mainContent" class="hidden">
+            <p>This app requires access to your device's orientation sensors.</p>
             <div class="controls">
-                <label for="sensorSelect">Select Compass View:</label>
-                <select id="sensorSelect">
-                    <option value="compass_raw">Compass Heading (Raw °)</option>
-                    <option value="compass_adj">Compass Heading (Zero-Adjusted °)</option>
-                </select>
-
-                <div class="slider-container">
-                    <label for="samplingIntervalSlider">Sampling Interval (X seconds):</label>
-                    <input type="range" id="samplingIntervalSlider" min="0.1" max="5" step="0.1" value="0.5">
-                    <span id="samplingIntervalValue">0.5 s</span>
-                </div>
-
-                <button id="filterButton">Apply SG Filter</button>
+                <button id="requestPermissionButton">Grant Orientation Sensor Access</button>
             </div>
+        </div>
 
-            <div class="chart-container">
-                <h3 id="chartTitle">Compass Heading (Raw °)</h3>
-                <canvas id="sensorChart"></canvas>
+        <div id="sensorValuesDisplay" class="sensor-values-display hidden">
+            <h2>Live Sensor Values:</h2>
+            <div class="sensor-value-item">
+                <strong>Alpha (α - Z axis rotation, Compass if absolute):</strong>
+                <span id="alphaValue">---</span>
+            </div>
+            <div class="sensor-value-item">
+                <strong>Beta (β - X axis rotation, front-to-back):</strong>
+                <span id="betaValue">---</span>
+            </div>
+            <div class="sensor-value-item">
+                <strong>Gamma (γ - Y axis rotation, side-to-side):</strong>
+                <span id="gammaValue">---</span>
+            </div>
+            <div class="sensor-value-item">
+                <strong>Absolute Orientation:</strong>
+                <span id="absoluteValue">---</span>
+            </div>
+            <div class="sensor-value-item">
+                <strong>WebKit Compass Heading (Legacy):</strong>
+                <span id="webkitCompassHeadingValue">---</span>
             </div>
         </div>
 
@@ -137,323 +128,72 @@
     </div>
 
     <script>
-        const MAX_CHART_POINTS = 50;
-        const SG_WINDOW_SIZE = 5;
-        const SG_COEFFICIENTS = [-3, 12, 17, 12, -3];
-        const SG_DENOMINATOR = 35;
-        const MAX_RAW_DATA_STORAGE = MAX_CHART_POINTS;
-
-        const CALIBRATION_DELAY_MS = 5000; // Shorter delay for compass
-        const CALIBRATION_DURATION_MS = 10000; // Shorter duration for compass
-
         const logArea = document.getElementById('logArea');
         const permissionSection = document.getElementById('permissionSection');
-        const compassDisplayDiv = document.getElementById('compassDisplay');
-        const rawCompassValueEl = document.getElementById('rawCompassValue');
-        const calibrationNotice = document.getElementById('calibrationNotice');
-        const calibrationText = document.getElementById('calibrationText');
-        const mainContent = document.getElementById('mainContent');
-        const sensorSelect = document.getElementById('sensorSelect');
-        const filterButton = document.getElementById('filterButton');
-        const chartTitle = document.getElementById('chartTitle');
-        const samplingIntervalSlider = document.getElementById('samplingIntervalSlider');
-        const samplingIntervalValueDisplay = document.getElementById('samplingIntervalValue');
+        const requestPermissionButton = document.getElementById('requestPermissionButton');
+        const sensorValuesDisplayDiv = document.getElementById('sensorValuesDisplay');
 
-        let sensorChart;
-        let currentSensorKey = 'compass_raw'; // Default to raw compass view
-        let samplingIntervalMs = parseFloat(samplingIntervalSlider.value) * 1000;
-
-        let sensorData = {
-            compass_raw: { raw: [], filteredForChart: [], lpfActive: false },
-            compass_adj: { raw: [], filteredForChart: [], lpfActive: false }
-        };
-        let chartLabels = [];
-
-        let calibrationState = 'pending'; // pending, delay, collecting, complete
-        let calibrationStartTimestamp;
-        let tempCalibrationData = {
-            compass: [] // For collecting compass readings during calibration
-        };
-        let compassZeroOffset = 0; // The average heading during calibration
+        // DOM elements for displaying values
+        const alphaValueEl = document.getElementById('alphaValue');
+        const betaValueEl = document.getElementById('betaValue');
+        const gammaValueEl = document.getElementById('gammaValue');
+        const absoluteValueEl = document.getElementById('absoluteValue');
+        const webkitCompassHeadingValueEl = document.getElementById('webkitCompassHeadingValue');
 
         let orientationSensorActive = false;
-        let orientationEventListenerType = null;
+        let orientationEventListenerType = null; // To track which listener is active
 
         function logMessage(message, type = 'info') {
             const entry = document.createElement('div');
-            entry.classList.add('log-entry', type);
+            entry.classList.add('log-entry', type); // Assign class based on type for styling
             entry.textContent = `[${new Date().toLocaleTimeString()}] ${type.toUpperCase()}: ${message}`;
             logArea.appendChild(entry);
             logArea.scrollTop = logArea.scrollHeight;
         }
 
-        function createChart(canvasId) {
-            const ctx = document.getElementById(canvasId).getContext('2d');
-            return new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Compass Value (°)', // Will be updated by updateChart
-                        data: [],
-                        borderColor: 'rgb(0, 123, 255)', // Blue
-                        tension: 0.1,
-                        fill: false
-                    }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: true,
-                    scales: {
-                        x: { title: { display: true, text: 'Time' } },
-                        y: { title: { display: true, text: 'Heading (°)' } }
-                    },
-                    animation: { duration: 0 }
+        function formatSensorValue(value, precision = 6) {
+            if (value === null || typeof value === 'undefined') {
+                return '---';
+            }
+            if (typeof value === 'boolean') {
+                return value.toString();
+            }
+            if (typeof value === 'number') {
+                // Show many decimal places, but avoid excessively long strings for NaN or Infinity
+                if (isNaN(value) || !isFinite(value)) {
+                    return value.toString();
                 }
-            });
-        }
-
-        function savitzkyGolaySmooth(data) {
-            // ... (same SG filter logic)
-            const windowSize = SG_WINDOW_SIZE;
-            const coeffs = SG_COEFFICIENTS;
-            const denominator = SG_DENOMINATOR;
-            const halfWindow = Math.floor(windowSize / 2);
-            const smoothedData = [];
-            if (data.length === 0) return [];
-            for (let i = 0; i < data.length; i++) {
-                if (i < halfWindow || i >= data.length - halfWindow || data.length < windowSize) {
-                    smoothedData.push(data[i]);
-                } else {
-                    let sum = 0;
-                    for (let j = 0; j < windowSize; j++) {
-                        sum += coeffs[j] * data[i - halfWindow + j];
-                    }
-                    smoothedData.push(sum / denominator);
-                }
+                return value.toFixed(precision); // Display with specified precision
             }
-            return smoothedData;
-        }
-
-        function processSensorDataForChart(key, value) {
-            if (!sensorData[key]) {
-                logMessage(`DEBUG: processSensorDataForChart - sensorData entry missing for key ${key}`, 'debug');
-                return;
-            }
-            const dataObj = sensorData[key];
-            dataObj.raw.push(value);
-            if (dataObj.raw.length > MAX_RAW_DATA_STORAGE) {
-                dataObj.raw.shift();
-            }
-            const currentInputSegmentForChart = dataObj.raw.slice(-MAX_CHART_POINTS);
-            if (dataObj.lpfActive) {
-                dataObj.filteredForChart = savitzkyGolaySmooth(currentInputSegmentForChart);
-            } else {
-                dataObj.filteredForChart = [...currentInputSegmentForChart];
-            }
-        }
-
-        function updateChart() {
-            if (!sensorChart || !sensorData[currentSensorKey]) return;
-            // Compass data can be shown pre-calibration for raw, or post-calibration for adjusted
-            if (currentSensorKey === 'compass_adj' && calibrationState !== 'complete') {
-                 logMessage(`DEBUG: updateChart - Calibration not complete for ${currentSensorKey}. State: ${calibrationState}`, 'debug');
-                return;
-            }
-
-            const currentFilteredData = sensorData[currentSensorKey].filteredForChart;
-            const currentLabels = chartLabels.slice(-currentFilteredData.length);
-
-            sensorChart.data.labels = currentLabels;
-            sensorChart.data.datasets[0].data = currentFilteredData;
-
-            let valueType = currentSensorKey === 'compass_raw' ? "(Raw °)" : "(Zero-Adjusted °)";
-            sensorChart.data.datasets[0].label = `Compass ${valueType} (Sampled ~${(samplingIntervalMs/1000).toFixed(1)}s)`;
-            sensorChart.update();
-        }
-
-        function handleCalibrationLogic(eventTime, compassValue) {
-            if (calibrationState === 'pending' && orientationSensorActive) {
-                calibrationStartTimestamp = eventTime;
-                calibrationState = 'delay';
-                calibrationNotice.classList.remove('hidden');
-                compassDisplayDiv.classList.remove('hidden'); // Show raw display now
-                calibrationText.textContent = `Compass Calibration: Delay phase for ${CALIBRATION_DELAY_MS / 1000}s. Keep device pointed in a reference direction.`;
-                logMessage(`Compass calibration sequence started. Delay phase (${CALIBRATION_DELAY_MS / 1000}s). Keep device still/pointed.`, 'info');
-                return true;
-            }
-
-            if (calibrationState === 'delay') {
-                if (eventTime >= calibrationStartTimestamp + CALIBRATION_DELAY_MS) {
-                    calibrationState = 'collecting';
-                    calibrationStartTimestamp = eventTime; // Reset for collection duration
-                    tempCalibrationData.compass = []; // Clear previous collection
-                    calibrationText.textContent = `Compass Calibration: Collecting data for ${CALIBRATION_DURATION_MS / 1000}s. Keep device still/pointed.`;
-                    logMessage(`Compass calibration delay complete. Collecting data for zeroing (${CALIBRATION_DURATION_MS / 1000}s).`, 'info');
-                } else {
-                    const timeLeft = Math.round((calibrationStartTimestamp + CALIBRATION_DELAY_MS - eventTime) / 1000);
-                    calibrationText.textContent = `Compass Calibration: Delay phase... ${timeLeft}s remaining. Keep device still/pointed.`;
-                    return true;
-                }
-            }
-
-            if (calibrationState === 'collecting') {
-                if (compassValue !== null) { // Only add valid compass values
-                    tempCalibrationData.compass.push(compassValue);
-                }
-                if (eventTime >= calibrationStartTimestamp + CALIBRATION_DURATION_MS) {
-                    calibrationState = 'complete';
-                    calibrationText.textContent = 'Compass calibration complete!';
-                    logMessage('Compass calibration data collection complete. Calculating zero offset...', 'info');
-
-                    if (tempCalibrationData.compass.length > 0) {
-                        const sum = tempCalibrationData.compass.reduce((s, v) => s + v, 0);
-                        compassZeroOffset = sum / tempCalibrationData.compass.length;
-                        logMessage(`Compass zero offset calculated: ${compassZeroOffset.toFixed(2)}° from ${tempCalibrationData.compass.length} samples.`, 'info');
-                    } else {
-                        compassZeroOffset = 0;
-                        logMessage('No compass data collected during calibration. Zero offset set to 0.', 'warn');
-                    }
-                    tempCalibrationData.compass = []; // Clear
-                    // Clear existing chart data for both raw and adjusted views
-                    sensorData.compass_raw.raw = []; sensorData.compass_raw.filteredForChart = [];
-                    sensorData.compass_adj.raw = []; sensorData.compass_adj.filteredForChart = [];
-                    chartLabels = [];
-
-                    setTimeout(() => calibrationNotice.classList.add('hidden'), 3000);
-                    mainContent.classList.remove('hidden');
-                    updateChart(); // Update chart, possibly showing empty adjusted data initially
-                } else {
-                    const timeLeft = Math.round((calibrationStartTimestamp + CALIBRATION_DURATION_MS - eventTime) / 1000);
-                    calibrationText.textContent = `Compass Calibration: Collecting data... ${tempCalibrationData.compass.length} samples, ${timeLeft}s remaining. Keep still/pointed.`;
-                    return true;
-                }
-            }
-            return false;
+            return String(value); // Fallback for other types
         }
 
         function handleDeviceOrientation(event) {
-            const currentTime = Date.now();
             if (!orientationSensorActive) {
-                logMessage(`First ${orientationEventListenerType || 'deviceorientation'} event received.`, 'info');
+                logMessage(`First ${orientationEventListenerType || 'deviceorientation'} event received. Displaying data.`, 'info');
                 orientationSensorActive = true;
+                sensorValuesDisplayDiv.classList.remove('hidden'); // Show display on first event
             }
 
-            let rawCompass = null;
-            if (event.absolute === true && typeof event.alpha === 'number') {
-                rawCompass = event.alpha;
-            } else if (typeof event.webkitCompassHeading === 'number') {
-                rawCompass = event.webkitCompassHeading;
-            }
-            // Log all relevant properties for debugging, even if not used for rawCompass
-            logMessage(`DEBUG: ${orientationEventListenerType} Event: alpha=${event.alpha?.toFixed(1)}, abs=${event.absolute}, webkitCH=${event.webkitCompassHeading?.toFixed(1)}`, 'debug');
-
-
-            if (rawCompass !== null) {
-                rawCompassValueEl.textContent = `${rawCompass.toFixed(1)} °`;
-                compassDisplayDiv.classList.remove('hidden'); // Ensure it's visible
-            } else {
-                rawCompassValueEl.textContent = `--- ° (No valid data)`;
+            // Log the raw event object once to see all available properties
+            if (orientationSensorActive && !window.orientationEventLogged) {
+                console.log("Full DeviceOrientationEvent object:", event);
+                logMessage("Full DeviceOrientationEvent object logged to browser console.", 'debug');
+                window.orientationEventLogged = true; // Log only once
             }
 
-            if (handleCalibrationLogic(currentTime, rawCompass)) {
-                // If calibration logic is active (delay or collecting), don't plot yet
-                return;
-            }
+            alphaValueEl.textContent = formatSensorValue(event.alpha);
+            betaValueEl.textContent = formatSensorValue(event.beta);
+            gammaValueEl.textContent = formatSensorValue(event.gamma);
+            absoluteValueEl.textContent = formatSensorValue(event.absolute);
+            webkitCompassHeadingValueEl.textContent = formatSensorValue(event.webkitCompassHeading);
 
-            // Plotting logic, only if calibration is complete OR if viewing raw data
-            if (rawCompass !== null && (calibrationState === 'complete' || currentSensorKey === 'compass_raw')) {
-                let processedCurrentSensorThisTick = false;
-
-                // Process for raw view
-                if (currentTime >= (lastSampledTime['compass_raw'] || 0) + samplingIntervalMs) {
-                    lastSampledTime['compass_raw'] = currentTime;
-                    processSensorDataForChart('compass_raw', rawCompass);
-                    if (currentSensorKey === 'compass_raw') {
-                        processedCurrentSensorThisTick = true;
-                    }
-                }
-
-                // Process for adjusted view (only if calibration is complete)
-                if (calibrationState === 'complete' && currentTime >= (lastSampledTime['compass_adj'] || 0) + samplingIntervalMs) {
-                    lastSampledTime['compass_adj'] = currentTime;
-                    // Calculate adjusted value with wraparound
-                    let adjustedCompass = (rawCompass - compassZeroOffset + 360) % 360;
-                    processSensorDataForChart('compass_adj', adjustedCompass);
-                    if (currentSensorKey === 'compass_adj') {
-                        processedCurrentSensorThisTick = true;
-                    }
-                }
-
-                if (processedCurrentSensorThisTick) {
-                    const nowLabel = new Date(currentTime).toLocaleTimeString().split(" ")[0];
-                    if (chartLabels.length >= MAX_CHART_POINTS) chartLabels.shift();
-                    chartLabels.push(nowLabel);
-                    updateChart();
-                }
-            }
+            // More detailed logging for debugging if needed
+            // logMessage(`DEBUG: alpha=${event.alpha}, beta=${event.beta}, gamma=${event.gamma}, abs=${event.absolute}, webkitCH=${event.webkitCompassHeading}`, 'debug');
         }
-
-        samplingIntervalSlider.addEventListener('input', (e) => {
-            samplingIntervalMs = parseFloat(e.target.value) * 1000;
-            samplingIntervalValueDisplay.textContent = `${parseFloat(e.target.value).toFixed(1)} s`;
-            logMessage(`Sampling interval set to ${parseFloat(e.target.value).toFixed(1)}s.`);
-            Object.keys(lastSampledTime).forEach(key => lastSampledTime[key] = 0); // Reset sampling times
-            sensorData.compass_raw.raw = []; sensorData.compass_raw.filteredForChart = [];
-            sensorData.compass_adj.raw = []; sensorData.compass_adj.filteredForChart = [];
-            chartLabels = [];
-            updateChart();
-            logMessage('Chart data cleared due to sampling interval change.');
-        });
-
-        function updateFilterButtonState() {
-            if (!sensorData[currentSensorKey]) return;
-            const dataObj = sensorData[currentSensorKey];
-            filterButton.textContent = dataObj.lpfActive ? 'SG Filter Active (Click to Deactivate)' : 'Apply SG Filter';
-            filterButton.classList.toggle('active', dataObj.lpfActive);
-        }
-
-        sensorSelect.addEventListener('change', (e) => {
-            const newSensorKey = e.target.value;
-            if (newSensorKey === 'compass_adj' && calibrationState !== 'complete') {
-                logMessage('Please wait for compass calibration to complete before viewing adjusted values.', 'warn');
-                e.target.value = currentSensorKey; // Revert
-                return;
-            }
-            currentSensorKey = newSensorKey;
-            chartTitle.textContent = e.target.options[e.target.selectedIndex].text;
-            logMessage(`Switched to sensor view: ${chartTitle.textContent}`);
-            updateFilterButtonState();
-            // Re-populate labels based on existing data for the new view
-            chartLabels = [];
-            const dataLength = sensorData[currentSensorKey] ? sensorData[currentSensorKey].filteredForChart.length : 0;
-            const now = new Date().toLocaleTimeString().split(" ")[0];
-            for(let i=0; i< dataLength; i++) chartLabels.push(now); // Fill with placeholder labels
-            updateChart();
-        });
-
-        filterButton.addEventListener('click', () => {
-            if (currentSensorKey === 'compass_adj' && calibrationState !== 'complete') {
-                logMessage('Please wait for compass calibration to complete before toggling filter on adjusted values.', 'warn');
-                return;
-            }
-            if (!sensorData[currentSensorKey]) return;
-
-            const dataObj = sensorData[currentSensorKey];
-            dataObj.lpfActive = !dataObj.lpfActive;
-            updateFilterButtonState();
-            logMessage(`${chartTitle.textContent} SG filter ${dataObj.lpfActive ? 'activated' : 'deactivated'}.`);
-
-            const currentRawSegment = dataObj.raw.slice(-MAX_CHART_POINTS);
-            if (dataObj.lpfActive) {
-                dataObj.filteredForChart = savitzkyGolaySmooth(currentRawSegment);
-            } else {
-                dataObj.filteredForChart = [...currentRawSegment];
-            }
-            updateChart();
-        });
 
         function requestOrientationPermission() {
-            logMessage('Attempting to request orientation sensor permission...');
+            logMessage('Attempting to request orientation sensor permission...', 'info');
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission()
                     .then(permissionState => {
@@ -461,19 +201,18 @@
                         if (permissionState === 'granted') {
                             orientationEventListenerType = 'deviceorientationabsolute'; // Prefer this
                             window.addEventListener('deviceorientationabsolute', handleDeviceOrientation, true);
-                            window.addEventListener('deviceorientation', (event) => { // Fallback
+                            // Add standard listener as fallback or for devices that only support it
+                            window.addEventListener('deviceorientation', (e) => {
                                 if (orientationEventListenerType !== 'deviceorientationabsolute' || !orientationSensorActive) {
-                                    orientationEventListenerType = 'deviceorientation';
+                                    orientationEventListenerType = 'deviceorientation'; // Log which type if 'absolute' isn't firing first
                                 }
-                                handleDeviceOrientation(event);
+                                handleDeviceOrientation(e);
                             }, true);
                             permissionSection.classList.add('hidden');
-                            // Calibration will start once first orientation event is received
-                            // Main content will be shown by calibration logic or if raw data is viewed
-                            logMessage('Orientation permission granted. Waiting for first event to start calibration.', 'info');
+                            // Sensor display will be shown by handleDeviceOrientation on first event
                         } else {
                             logMessage('Orientation sensor permission denied by user.', 'error');
-                            alert('Permission denied. Compass data will not be available.');
+                            alert('Permission denied. Sensor data will not be available.');
                         }
                     })
                     .catch(error => {
@@ -484,36 +223,34 @@
                 logMessage('DeviceOrientationEvent available (no specific permission needed or already granted). Adding listeners.', 'info');
                 orientationEventListenerType = 'deviceorientationabsolute';
                 window.addEventListener('deviceorientationabsolute', handleDeviceOrientation, true);
-                window.addEventListener('deviceorientation', (event) => {
-                    if (orientationEventListenerType !== 'deviceorientationabsolute' || !orientationSensorActive) {
+                window.addEventListener('deviceorientation', (e) => {
+                     if (orientationEventListenerType !== 'deviceorientationabsolute' || !orientationSensorActive) {
                         orientationEventListenerType = 'deviceorientation';
                     }
-                    handleDeviceOrientation(event);
+                    handleDeviceOrientation(e);
                 }, true);
                 permissionSection.classList.add('hidden');
-                // Main content will be shown by calibration logic or if raw data is viewed
+                // Sensor display will be shown by handleDeviceOrientation on first event
             } else {
                 logMessage('DeviceOrientationEvent API not supported on this browser.', 'error');
                 alert('Device Orientation API not supported. This app will not work.');
+                sensorValuesDisplayDiv.classList.remove('hidden'); // Show it anyway, values will be '---'
+                alphaValueEl.textContent = "API N/A";
+                betaValueEl.textContent = "API N/A";
+                gammaValueEl.textContent = "API N/A";
+                absoluteValueEl.textContent = "API N/A";
+                webkitCompassHeadingValueEl.textContent = "API N/A";
             }
         }
 
         window.addEventListener('load', () => {
-            logMessage('App loaded. HTTPS: ' + (window.location.protocol === "https:" ? "Yes" : "No - WARNING: Sensors may not work"), 'info');
-            sensorChart = createChart('sensorChart');
-            currentSensorKey = sensorSelect.value;
-            chartTitle.textContent = sensorSelect.options[sensorSelect.selectedIndex].text;
-            samplingIntervalSlider.value = (samplingIntervalMs / 1000).toFixed(1);
-            samplingIntervalValueDisplay.textContent = `${(samplingIntervalMs / 1000).toFixed(1)} s`;
-
+            logMessage('App loaded. HTTPS: ' + (window.location.protocol === "https:" ? "Yes" : "No - WARNING: Sensors may not work on HTTP"), 'info');
             requestPermissionButton.addEventListener('click', requestOrientationPermission);
 
             if (window.navigator.standalone === true) {
-                logMessage('Runnng in PWA mode (iOS).');
+                logMessage('Running in PWA mode (iOS).', 'info');
             }
-            mainContent.classList.add('hidden');
-            calibrationNotice.classList.add('hidden');
-            compassDisplayDiv.classList.add('hidden');
+            // Sensor display div is initially hidden, shown on first sensor event after permission
         });
     </script>
 </body>
