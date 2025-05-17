@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Motion & Magnetic Sensor Visualizer (Sampling Interval)</title>
+    <title>Motion & Orientation Sensor Visualizer</title>
 
     <!-- Apple Web App Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -114,7 +114,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Motion & Magnetic Sensor Visualizer (Sampling Interval)</h1>
+        <h1>Motion & Orientation Sensor Visualizer</h1>
 
         <div id="permissionSection" class="permission-section">
             <p>This app requires access to your device's motion and orientation sensors.</p>
@@ -122,25 +122,26 @@
         </div>
 
         <div id="calibrationNotice" class="calibration-notice hidden">
-            <p id="calibrationText">Initializing calibration...</p>
+            <p id="calibrationText">Initializing calibration (for motion sensors)...</p>
         </div>
 
         <div id="mainContent" class="hidden">
             <div class="controls">
-                <label for="sensorSelect">Select Sensor Axis:</label>
+                <label for="sensorSelect">Select Sensor Data:</label>
                 <select id="sensorSelect">
-                    <option value="accelX">Accelerometer X</option>
-                    <option value="accelY">Accelerometer Y</option>
-                    <option value="accelZ">Accelerometer Z</option>
-                    <option value="gyroAlpha">Gyroscope Alpha (Z-axis)</option>
-                    <option value="gyroBeta">Gyroscope Beta (X-axis)</option>
-                    <option value="gyroGamma">Gyroscope Gamma (Y-axis)</option>
-                    <option value="magX_raw">Magnetometer X (Raw)</option>
-                    <option value="magY_raw">Magnetometer Y (Raw)</option>
-                    <option value="magZ_raw">Magnetometer Z (Raw)</option>
-                    <option value="magX_adj">Magnetometer X (Zero-Adjusted)</option>
-                    <option value="magY_adj">Magnetometer Y (Zero-Adjusted)</option>
-                    <option value="magZ_adj">Magnetometer Z (Zero-Adjusted)</option>
+                    <option value="accelX">Accelerometer X (Zero-Adj.)</option>
+                    <option value="accelY">Accelerometer Y (Zero-Adj.)</option>
+                    <option value="accelZ">Accelerometer Z (Zero-Adj.)</option>
+                    <option value="gyroAlpha">Gyroscope Alpha (Z, Zero-Adj.)</option>
+                    <option value="gyroBeta">Gyroscope Beta (X, Zero-Adj.)</option>
+                    <option value="gyroGamma">Gyroscope Gamma (Y, Zero-Adj.)</option>
+                    <option value="compassHeading">Compass Heading (°)</option>
+                    <option value="magX_raw" disabled>Magnetometer X (Raw - If Supported)</option>
+                    <option value="magY_raw" disabled>Magnetometer Y (Raw - If Supported)</option>
+                    <option value="magZ_raw" disabled>Magnetometer Z (Raw - If Supported)</option>
+                    <option value="magX_adj" disabled>Magnetometer X (Zero-Adj. - If Supported)</option>
+                    <option value="magY_adj" disabled>Magnetometer Y (Zero-Adj. - If Supported)</option>
+                    <option value="magZ_adj" disabled>Magnetometer Z (Zero-Adj. - If Supported)</option>
                 </select>
 
                 <div class="slider-container">
@@ -153,7 +154,7 @@
             </div>
 
             <div class="chart-container">
-                <h3 id="chartTitle">Accelerometer X</h3>
+                <h3 id="chartTitle">Accelerometer X (Zero-Adj.)</h3>
                 <canvas id="sensorChart"></canvas>
             </div>
         </div>
@@ -169,11 +170,11 @@
         const SG_WINDOW_SIZE = 5;
         const SG_COEFFICIENTS = [-3, 12, 17, 12, -3];
         const SG_DENOMINATOR = 35;
-        const MAX_RAW_DATA_STORAGE = MAX_CHART_POINTS; // Keep this aligned or manage separately if needed
+        const MAX_RAW_DATA_STORAGE = MAX_CHART_POINTS;
 
         const CALIBRATION_DELAY_MS = 10000;
         const CALIBRATION_DURATION_MS = 30000;
-        const MAGNETOMETER_FREQUENCY = 10; // Hz, for requesting data from sensor
+        const MAGNETOMETER_FREQUENCY = 10; // Hz, for generic Magnetometer API
 
         const logArea = document.getElementById('logArea');
         const permissionSection = document.getElementById('permissionSection');
@@ -197,6 +198,8 @@
             gyroAlpha: { raw: [], filteredForChart: [], lpfActive: false },
             gyroBeta: { raw: [], filteredForChart: [], lpfActive: false },
             gyroGamma: { raw: [], filteredForChart: [], lpfActive: false },
+            compassHeading: { raw: [], filteredForChart: [], lpfActive: false }, // New
+            // Magnetometer options remain for browsers that support Generic Sensor API
             magX_raw: { raw: [], filteredForChart: [], lpfActive: false },
             magY_raw: { raw: [], filteredForChart: [], lpfActive: false },
             magZ_raw: { raw: [], filteredForChart: [], lpfActive: false },
@@ -206,27 +209,30 @@
         };
         let chartLabels = [];
 
-        let calibrationState = 'pending'; // pending, delay, collecting, complete
+        let calibrationState = 'pending'; // pending, delay, collecting, complete (for motion sensors)
         let calibrationStartTimestamp;
-        let tempCalibrationData = {
+        let tempCalibrationData = { // Only for sensors needing zeroing
             accelX: [], accelY: [], accelZ: [],
             gyroAlpha: [], gyroBeta: [], gyroGamma: [],
-            magX: [], magY: [], magZ: [] // For magnetometer calibration
+            magX: [], magY: [], magZ: [] // For generic magnetometer if available
         };
-        let sensorZeroOffsets = {
+        let sensorZeroOffsets = { // Only for sensors needing zeroing
             accelX: 0, accelY: 0, accelZ: 0,
             gyroAlpha: 0, gyroBeta: 0, gyroGamma: 0,
-            magX: 0, magY: 0, magZ: 0 // For magnetometer zeroing
+            magX: 0, magY: 0, magZ: 0 // For generic magnetometer if available
         };
-        let lastSampledTime = { // Tracks last sample time for each chartable key
+        let lastSampledTime = {
             accelX: 0, accelY: 0, accelZ: 0,
             gyroAlpha: 0, gyroBeta: 0, gyroGamma: 0,
+            compassHeading: 0, // New
             magX_raw: 0, magY_raw: 0, magZ_raw: 0,
             magX_adj: 0, magY_adj: 0, magZ_adj: 0
         };
 
-        let magnetometerSensor;
-        let magnetometerAvailable = false;
+        let magnetometerSensor; // For Generic Sensor API
+        let genericMagnetometerAvailable = false; // Flag for Generic Sensor API
+        let motionSensorsActive = false;
+        let orientationSensorActive = false;
 
         function logMessage(message, type = 'info') {
             const entry = document.createElement('div');
@@ -245,7 +251,7 @@
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'Sensor Value', // Will be updated
+                        label: 'Sensor Value',
                         data: [],
                         borderColor: 'rgb(75, 192, 192)',
                         tension: 0.1,
@@ -259,12 +265,13 @@
                         x: { title: { display: true, text: 'Time' } },
                         y: { title: { display: true, text: 'Value' } }
                     },
-                    animation: { duration: 0 } // Disable animation for real-time feel
+                    animation: { duration: 0 }
                 }
             });
         }
 
         function savitzkyGolaySmooth(data) {
+            // ... (same as before)
             const windowSize = SG_WINDOW_SIZE;
             const coeffs = SG_COEFFICIENTS;
             const denominator = SG_DENOMINATOR;
@@ -304,15 +311,12 @@
         }
 
         function updateChart() {
-            if (!sensorChart || !sensorData[currentSensorKey] || calibrationState !== 'complete') {
-                 if (calibrationState !== 'complete' && sensorData[currentSensorKey] && sensorData[currentSensorKey].raw.length > 0) {
-                    // Allow chart update even if calibration isn't complete for raw mag data if selected
-                    if (!currentSensorKey.endsWith('_raw') && !currentSensorKey.startsWith('mag')) {
-                        return;
-                    }
-                 } else if (!sensorData[currentSensorKey]) {
-                    return;
-                 }
+            // Allow chart updates for compassHeading or raw mag data even if motion calibration isn't complete.
+            const canUpdateBeforeMotionCalib = currentSensorKey === 'compassHeading' ||
+                                             (currentSensorKey.startsWith('mag') && currentSensorKey.endsWith('_raw'));
+
+            if (!sensorChart || !sensorData[currentSensorKey] || (calibrationState !== 'complete' && !canUpdateBeforeMotionCalib)) {
+                return;
             }
 
             const currentFilteredData = sensorData[currentSensorKey].filteredForChart;
@@ -320,85 +324,98 @@
 
             sensorChart.data.labels = currentLabels;
             sensorChart.data.datasets[0].data = currentFilteredData;
-            let unit = ""; // Add units if known, e.g. "μT" for magnetometer
-            if (currentSensorKey.startsWith('mag')) unit = " (μT)"; // Microteslas
-            else if (currentSensorKey.startsWith('accel')) unit = " (m/s²)";
-            else if (currentSensorKey.startsWith('gyro')) unit = " (°/s)";
 
-            let labelSuffix = ` (sampled every ~${(samplingIntervalMs/1000).toFixed(1)}s)`;
-            if(currentSensorKey.endsWith('_adj')) {
-                labelSuffix = ` (relative to zero${unit})${labelSuffix}`;
-            } else if (currentSensorKey.endsWith('_raw')) {
-                labelSuffix = ` (raw value${unit})${labelSuffix}`;
-            } else {
-                 labelSuffix = ` (relative to zero${unit})${labelSuffix}`;
+            let unit = "";
+            let valueType = "";
+
+            if (currentSensorKey.startsWith('accel')) { unit = " (m/s²)"; valueType = " (Zero-Adj.)"; }
+            else if (currentSensorKey.startsWith('gyro')) { unit = " (°/s)"; valueType = " (Zero-Adj.)"; }
+            else if (currentSensorKey === 'compassHeading') { unit = " (°)"; valueType = " (Raw)"; }
+            else if (currentSensorKey.startsWith('mag')) {
+                unit = " (μT)";
+                valueType = currentSensorKey.endsWith('_adj') ? " (Zero-Adj.)" : " (Raw)";
             }
 
-
+            let labelSuffix = `${valueType}${unit} (sampled every ~${(samplingIntervalMs/1000).toFixed(1)}s)`;
             sensorChart.data.datasets[0].label = `${chartTitle.textContent}${labelSuffix}`;
             sensorChart.update();
         }
 
         function handleCalibrationLogic(eventTime) {
-            // This function manages calibration state transitions
-            // Actual data collection happens in specific sensor handlers
-            if (calibrationState === 'pending') {
+            // This function manages calibration state transitions FOR MOTION SENSORS
+            if (calibrationState === 'pending' && motionSensorsActive) { // Start calib only if motion sensors are active
                 calibrationStartTimestamp = eventTime;
                 calibrationState = 'delay';
                 calibrationNotice.classList.remove('hidden');
-                calibrationText.textContent = `Calibration: Delay phase for ${CALIBRATION_DELAY_MS / 1000}s. Keep device still.`;
-                logMessage(`Calibration sequence started. Delay phase (${CALIBRATION_DELAY_MS / 1000}s).`);
-                return true; // Indicates state changed
+                calibrationText.textContent = `Calibration (Motion): Delay phase for ${CALIBRATION_DELAY_MS / 1000}s. Keep device still.`;
+                logMessage(`Motion sensor calibration sequence started. Delay phase (${CALIBRATION_DELAY_MS / 1000}s).`);
+                return true;
             }
 
             if (calibrationState === 'delay') {
                 if (eventTime >= calibrationStartTimestamp + CALIBRATION_DELAY_MS) {
                     calibrationState = 'collecting';
-                    calibrationStartTimestamp = eventTime; // Reset for collection duration
-                    calibrationText.textContent = `Calibration: Collecting sensor data for ${CALIBRATION_DURATION_MS / 1000}s. Keep device still.`;
-                    logMessage(`Calibration delay complete. Collecting data for zeroing (${CALIBRATION_DURATION_MS / 1000}s).`);
+                    calibrationStartTimestamp = eventTime;
+                    calibrationText.textContent = `Calibration (Motion): Collecting data for ${CALIBRATION_DURATION_MS / 1000}s. Keep device still.`;
+                    logMessage(`Motion calibration delay complete. Collecting data for zeroing (${CALIBRATION_DURATION_MS / 1000}s).`);
                 } else {
                     const timeLeft = Math.round((calibrationStartTimestamp + CALIBRATION_DELAY_MS - eventTime) / 1000);
-                    calibrationText.textContent = `Calibration: Delay phase... ${timeLeft}s remaining. Keep still.`;
-                    return true; // Still in delay
+                    calibrationText.textContent = `Calibration (Motion): Delay phase... ${timeLeft}s remaining. Keep still.`;
+                    return true;
                 }
             }
 
             if (calibrationState === 'collecting') {
                 if (eventTime >= calibrationStartTimestamp + CALIBRATION_DURATION_MS) {
                     calibrationState = 'complete';
-                    calibrationText.textContent = 'Calibration complete! Plotting relative values.';
-                    logMessage('Calibration data collection complete. Calculating zero offsets...');
-                    ['accelX', 'accelY', 'accelZ', 'gyroAlpha', 'gyroBeta', 'gyroGamma', 'magX', 'magY', 'magZ'].forEach(key => {
+                    calibrationText.textContent = 'Motion sensor calibration complete!';
+                    logMessage('Motion sensor calibration data collection complete. Calculating zero offsets...');
+                    ['accelX', 'accelY', 'accelZ', 'gyroAlpha', 'gyroBeta', 'gyroGamma'].forEach(key => {
                         const sum = tempCalibrationData[key].reduce((s, v) => s + v, 0);
                         sensorZeroOffsets[key] = tempCalibrationData[key].length > 0 ? sum / tempCalibrationData[key].length : 0;
                         logMessage(`Zero offset for ${key}: ${sensorZeroOffsets[key].toFixed(4)}`);
-                        tempCalibrationData[key] = []; // Clear
+                        tempCalibrationData[key] = [];
                     });
-                    logMessage('Calibration complete. Plotting adjusted values.');
-                    // Clear existing data from all sensor stores and reset last sampled times
-                    Object.keys(sensorData).forEach(key => { sensorData[key].raw = []; sensorData[key].filteredForChart = []; });
-                    Object.keys(lastSampledTime).forEach(key => lastSampledTime[key] = 0);
-                    chartLabels = [];
+                    if (genericMagnetometerAvailable) { // Also calibrate generic magnetometer if it was collecting
+                        ['magX', 'magY', 'magZ'].forEach(key => {
+                            if (tempCalibrationData[key] && tempCalibrationData[key].length > 0) {
+                                const sum = tempCalibrationData[key].reduce((s, v) => s + v, 0);
+                                sensorZeroOffsets[key] = sum / tempCalibrationData[key].length;
+                                logMessage(`Zero offset for Generic ${key}: ${sensorZeroOffsets[key].toFixed(4)}`);
+                                tempCalibrationData[key] = [];
+                            }
+                        });
+                    }
+                    logMessage('Motion sensor calibration complete. Plotting zero-adjusted values.');
+                    // Clear data for motion sensors that were part of calibration
+                    ['accelX', 'accelY', 'accelZ', 'gyroAlpha', 'gyroBeta', 'gyroGamma'].forEach(key => {
+                        sensorData[key].raw = []; sensorData[key].filteredForChart = [];
+                        lastSampledTime[key] = 0;
+                    });
+                    if (genericMagnetometerAvailable) {
+                        ['magX_adj', 'magY_adj', 'magZ_adj'].forEach(key => {
+                             sensorData[key].raw = []; sensorData[key].filteredForChart = [];
+                             lastSampledTime[key] = 0;
+                        });
+                    }
+                    chartLabels = []; // Reset labels for calibrated sensors
                     setTimeout(() => calibrationNotice.classList.add('hidden'), 3000);
-                    mainContent.classList.remove('hidden');
-                    updateChart(); // Clear chart display initially
+                    mainContent.classList.remove('hidden'); // Show main content now
+                    updateChart();
                 } else {
                     const timeLeft = Math.round((calibrationStartTimestamp + CALIBRATION_DURATION_MS - eventTime) / 1000);
-                    calibrationText.textContent = `Calibration: Collecting data... ${timeLeft}s remaining. Keep still.`;
-                    return true; // Still collecting
+                    calibrationText.textContent = `Calibration (Motion): Collecting data... ${timeLeft}s remaining. Keep still.`;
+                    return true;
                 }
             }
-            return false; // No state change or still processing current state
+            return false;
         }
-
 
         function handleDeviceMotion(event) {
             const currentTime = Date.now();
+            motionSensorsActive = true; // Mark as active on first event
 
             if (handleCalibrationLogic(currentTime)) {
-                // If calibration logic handled the event (e.g., still in delay/collecting),
-                // and it's not yet complete, motion data shouldn't be processed for plotting yet.
                 if (calibrationState !== 'complete') return;
             }
 
@@ -411,7 +428,7 @@
 
             if (calibrationState === 'collecting') {
                 Object.keys(incomingMotionValues).forEach(key => {
-                    if (tempCalibrationData[key]) { // Ensure key exists in tempCalibrationData
+                    if (tempCalibrationData[key]) {
                         tempCalibrationData[key].push(incomingMotionValues[key]);
                     }
                 });
@@ -420,7 +437,6 @@
             if (calibrationState === 'complete') {
                 let processedCurrentSensorThisTick = false;
                 Object.keys(incomingMotionValues).forEach(key => {
-                    // Motion sensors are always zero-adjusted after calibration
                     if (currentTime >= (lastSampledTime[key] || 0) + samplingIntervalMs) {
                         lastSampledTime[key] = currentTime;
                         const zeroAdjustedValue = incomingMotionValues[key] - (sensorZeroOffsets[key] || 0);
@@ -440,15 +456,30 @@
             }
         }
 
-        function handleMagnetometerReading() {
+        function handleDeviceOrientation(event) {
+            const currentTime = Date.now();
+            orientationSensorActive = true; // Mark as active
+
+            if (!mainContent.classList.contains('hidden') && event.absolute === true && event.alpha !== null) {
+                const compassValue = event.alpha; // 0-360 degrees, raw value
+
+                if (currentSensorKey === 'compassHeading' && currentTime >= (lastSampledTime['compassHeading'] || 0) + samplingIntervalMs) {
+                    lastSampledTime['compassHeading'] = currentTime;
+                    processSensorDataForChart('compassHeading', compassValue);
+
+                    const nowLabel = new Date(currentTime).toLocaleTimeString().split(" ")[0];
+                    if (chartLabels.length >= MAX_CHART_POINTS) chartLabels.shift();
+                    chartLabels.push(nowLabel);
+                    updateChart();
+                }
+            }
+        }
+
+        // --- Generic Magnetometer API Handling (for compatible browsers) ---
+        function handleMagnetometerReading() { // For Generic Sensor API
             if (!magnetometerSensor) return;
             const currentTime = Date.now();
-
-            // Calibration logic might be handled by devicemotion, but mag data needs to be collected too
-            if (calibrationState === 'pending' || calibrationState === 'delay') {
-                // Magnetometer starts, but wait for calibration sequence to reach 'collecting'
-                return;
-            }
+            genericMagnetometerAvailable = true; // Mark as available on first reading
 
             const rawMagValues = {
                 magX: magnetometerSensor.x || 0,
@@ -456,13 +487,14 @@
                 magZ: magnetometerSensor.z || 0
             };
 
+            // Collect for calibration if motion sensor calibration is also in 'collecting' state
             if (calibrationState === 'collecting') {
                 tempCalibrationData.magX.push(rawMagValues.magX);
                 tempCalibrationData.magY.push(rawMagValues.magY);
                 tempCalibrationData.magZ.push(rawMagValues.magZ);
             }
 
-            if (calibrationState === 'complete' || currentSensorKey.endsWith("_raw")) { // Allow raw plotting even before full calibration
+            if (calibrationState === 'complete' || currentSensorKey.endsWith("_raw")) {
                 let processedCurrentSensorThisTick = false;
                 const keysToProcess = ['magX_raw', 'magY_raw', 'magZ_raw', 'magX_adj', 'magY_adj', 'magZ_adj'];
 
@@ -471,12 +503,12 @@
                         lastSampledTime[chartKey] = currentTime;
                         const baseKey = chartKey.substring(0, 4); // magX, magY, magZ
                         const rawValue = rawMagValues[baseKey];
-
                         let valueToProcess;
+
                         if (chartKey.endsWith('_raw')) {
                             valueToProcess = rawValue;
                         } else { // _adj
-                            if (calibrationState !== 'complete') return; // Don't plot adjusted if not calibrated
+                            if (calibrationState !== 'complete') return;
                             valueToProcess = rawValue - (sensorZeroOffsets[baseKey] || 0);
                         }
                         processSensorDataForChart(chartKey, valueToProcess);
@@ -485,7 +517,6 @@
                         }
                     }
                 });
-
                 if (processedCurrentSensorThisTick) {
                     const nowLabel = new Date(currentTime).toLocaleTimeString().split(" ")[0];
                     if (chartLabels.length >= MAX_CHART_POINTS) chartLabels.shift();
@@ -495,51 +526,55 @@
             }
         }
 
-        function handleMagnetometerError(event) {
-            logMessage(`Magnetometer Error: ${event.error.name} - ${event.error.message}. Magnetometer data will not be available.`, 'error');
-            magnetometerAvailable = false;
-            // Optionally disable magnetometer options in dropdown here
+        function handleMagnetometerError(event) { // For Generic Sensor API
+            logMessage(`Generic Magnetometer Error: ${event.error.name} - ${event.error.message}. Raw X,Y,Z magnetometer data may not be available.`, 'warn');
+            genericMagnetometerAvailable = false;
+            // Disable generic magnetometer options in dropdown
+            document.querySelectorAll('#sensorSelect option[value^="mag"]').forEach(opt => opt.disabled = true);
         }
 
-        function initializeMagnetometer() {
+        function initializeGenericMagnetometer() { // For Generic Sensor API
             if ('Magnetometer' in window) {
                 try {
-                    logMessage('Attempting to initialize Magnetometer sensor...');
+                    logMessage('Attempting to initialize Generic Magnetometer sensor...');
                     magnetometerSensor = new Magnetometer({ frequency: MAGNETOMETER_FREQUENCY });
                     magnetometerSensor.addEventListener('reading', handleMagnetometerReading);
                     magnetometerSensor.addEventListener('error', handleMagnetometerError);
                     magnetometerSensor.start();
-                    magnetometerAvailable = true;
-                    logMessage('Magnetometer sensor started.');
+                    logMessage('Generic Magnetometer sensor started (if supported).');
+                    // Enable options if successful (error handler will disable if issues)
+                    document.querySelectorAll('#sensorSelect option[value^="mag"]').forEach(opt => opt.disabled = false);
                 } catch (error) {
-                    logMessage(`Failed to initialize Magnetometer: ${error.name} - ${error.message}. This sensor may not be supported by your browser or device.`, 'error');
-                    magnetometerAvailable = false;
+                    logMessage(`Failed to initialize Generic Magnetometer: ${error.name} - ${error.message}. This sensor may not be supported.`, 'warn');
+                    genericMagnetometerAvailable = false;
+                    document.querySelectorAll('#sensorSelect option[value^="mag"]').forEach(opt => opt.disabled = true);
                 }
             } else {
-                logMessage('Magnetometer API not supported by this browser. Magnetic field data will not be available.', 'warn');
-                magnetometerAvailable = false;
+                logMessage('Generic Magnetometer API not supported by this browser. Raw X,Y,Z magnetometer data will not be available.', 'warn');
+                genericMagnetometerAvailable = false;
+                document.querySelectorAll('#sensorSelect option[value^="mag"]').forEach(opt => opt.disabled = true);
             }
         }
+        // --- End Generic Magnetometer API Handling ---
 
 
         samplingIntervalSlider.addEventListener('input', (e) => {
             samplingIntervalMs = parseFloat(e.target.value) * 1000;
             samplingIntervalValueDisplay.textContent = `${parseFloat(e.target.value).toFixed(1)} s`;
             logMessage(`Sampling interval set to ${parseFloat(e.target.value).toFixed(1)}s.`);
-            if (calibrationState === 'complete' || currentSensorKey.endsWith("_raw")) { // Allow reset if showing raw data
-                 Object.keys(lastSampledTime).forEach(key => lastSampledTime[key] = 0);
-                 Object.keys(sensorData).forEach(key => {
-                    sensorData[key].raw = [];
-                    sensorData[key].filteredForChart = [];
-                 });
-                 chartLabels = [];
-                 updateChart();
-                 logMessage('Chart data cleared due to sampling interval change.');
-            }
+            // Reset last sampled times and clear chart data for ALL sensors
+            Object.keys(lastSampledTime).forEach(key => lastSampledTime[key] = 0);
+            Object.keys(sensorData).forEach(key => {
+                sensorData[key].raw = [];
+                sensorData[key].filteredForChart = [];
+            });
+            chartLabels = [];
+            updateChart();
+            logMessage('Chart data cleared due to sampling interval change.');
         });
 
         function updateFilterButtonState() {
-            if (!sensorData[currentSensorKey]) return; // Should not happen if currentSensorKey is valid
+            if (!sensorData[currentSensorKey]) return;
             const dataObj = sensorData[currentSensorKey];
             filterButton.textContent = dataObj.lpfActive ? 'SG Filter Active (Click to Deactivate)' : 'Apply SG Filter';
             filterButton.classList.toggle('active', dataObj.lpfActive);
@@ -547,10 +582,12 @@
 
         sensorSelect.addEventListener('change', (e) => {
             const newSensorKey = e.target.value;
-            // Allow switching to _raw magnetometer axes even if calibration isn't complete
-            if (calibrationState !== 'complete' && !(newSensorKey.startsWith('mag') && newSensorKey.endsWith('_raw')) && calibrationState !== 'pending') {
-                logMessage('Please wait for calibration to complete before changing to non-raw sensor views.', 'warn');
-                e.target.value = currentSensorKey; // Revert selection
+            const isMotionSensor = ['accelX', 'accelY', 'accelZ', 'gyroAlpha', 'gyroBeta', 'gyroGamma'].includes(newSensorKey);
+            const isAdjustedMag = newSensorKey.startsWith('mag') && newSensorKey.endsWith('_adj');
+
+            if (calibrationState !== 'complete' && (isMotionSensor || isAdjustedMag)) {
+                logMessage('Please wait for motion sensor calibration to complete before viewing its adjusted values.', 'warn');
+                e.target.value = currentSensorKey;
                 return;
             }
 
@@ -559,17 +596,20 @@
             logMessage(`Switched to sensor: ${chartTitle.textContent}`);
             updateFilterButtonState();
 
-            chartLabels = []; // Reset labels
+            chartLabels = [];
             const dataLength = sensorData[currentSensorKey] ? sensorData[currentSensorKey].filteredForChart.length : 0;
             const now = new Date().toLocaleTimeString().split(" ")[0];
-            for(let i=0; i< dataLength; i++) chartLabels.push(now); // Fill with placeholder labels
+            for(let i=0; i< dataLength; i++) chartLabels.push(now);
 
-            updateChart(); // Update with potentially existing (but now current) sensor data
+            updateChart();
         });
 
         filterButton.addEventListener('click', () => {
-            if (calibrationState !== 'complete' && !(currentSensorKey.startsWith('mag') && currentSensorKey.endsWith('_raw'))) {
-                logMessage('Please wait for calibration to complete before toggling filter on adjusted values.', 'warn');
+            const isMotionSensor = ['accelX', 'accelY', 'accelZ', 'gyroAlpha', 'gyroBeta', 'gyroGamma'].includes(currentSensorKey);
+            const isAdjustedMag = currentSensorKey.startsWith('mag') && currentSensorKey.endsWith('_adj');
+
+            if (calibrationState !== 'complete' && (isMotionSensor || isAdjustedMag)) {
+                logMessage('Please wait for motion sensor calibration to complete before toggling filter on its adjusted values.', 'warn');
                 return;
             }
             if (!sensorData[currentSensorKey]) return;
@@ -579,7 +619,6 @@
             updateFilterButtonState();
             logMessage(`${chartTitle.textContent} SG filter ${dataObj.lpfActive ? 'activated' : 'deactivated'}.`);
 
-            // Re-process with or without filter
             const currentRawSegment = dataObj.raw.slice(-MAX_CHART_POINTS);
             if (dataObj.lpfActive) {
                 dataObj.filteredForChart = savitzkyGolaySmooth(currentRawSegment);
@@ -589,71 +628,93 @@
             updateChart();
         });
 
-
-        function requestMotionAndOrientationPermissions() {
+        function requestAllSensorPermissions() {
             logMessage('Attempting to request sensor permissions...');
-            let motionGranted = false;
+            let motionPermissionPromise = Promise.resolve('not_requested');
+            let orientationPermissionPromise = Promise.resolve('not_requested');
 
-            // Request DeviceMotionEvent (Accelerometer, Gyroscope)
-            const motionPromise = new Promise((resolve, reject) => {
-                if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-                    DeviceMotionEvent.requestPermission()
-                        .then(permissionState => {
-                            if (permissionState === 'granted') {
-                                logMessage('Motion sensor permission granted.');
-                                window.addEventListener('devicemotion', handleDeviceMotion, true);
-                                motionGranted = true;
-                                resolve();
-                            } else {
-                                logMessage('Motion sensor permission denied by user.', 'error');
-                                reject('Motion permission denied.');
-                            }
-                        })
-                        .catch(error => {
-                            logMessage(`Error requesting motion permission: ${error.name} - ${error.message}`, 'error');
-                            reject(`Motion permission error: ${error.message}`);
-                        });
-                } else if (typeof DeviceMotionEvent !== 'undefined') {
-                    logMessage('DeviceMotionEvent available (no specific permission needed or already granted).');
-                    window.addEventListener('devicemotion', handleDeviceMotion, true);
-                    motionGranted = true;
-                    resolve();
-                } else {
-                    logMessage('DeviceMotionEvent API not supported on this browser.', 'error');
-                    reject('DeviceMotionEvent API not supported.');
-                }
-            });
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                motionPermissionPromise = DeviceMotionEvent.requestPermission();
+            } else if (typeof DeviceMotionEvent !== 'undefined') {
+                motionPermissionPromise = Promise.resolve('granted'); // Assume granted if no request function
+            }
 
-            motionPromise.then(() => {
-                permissionSection.classList.add('hidden'); // Hide once motion is sorted
-                // Regardless of motion outcome for magnetometer (it's a separate API)
-                initializeMagnetometer(); // Attempt to start magnetometer
-            }).catch(errorMsg => {
-                alert('Sensor access issue: ' + errorMsg + '. Some functionalities may not work.');
-                // Still try to initialize magnetometer as it might work independently on some platforms
-                // or if user later grants a general sensor permission if prompted by Magnetometer API itself
-                initializeMagnetometer();
-                if (!motionGranted) { // If motion was specifically denied or errored
-                     // Keep permission section or show specific error if needed
-                } else {
-                     permissionSection.classList.add('hidden');
-                }
-            });
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                orientationPermissionPromise = DeviceOrientationEvent.requestPermission();
+            } else if (typeof DeviceOrientationEvent !== 'undefined') {
+                orientationPermissionPromise = Promise.resolve('granted'); // Assume granted
+            }
+
+            Promise.all([motionPermissionPromise, orientationPermissionPromise])
+                .then(([motionState, orientationState]) => {
+                    let motionGranted = false;
+                    let orientationGranted = false;
+
+                    if (motionState === 'granted') {
+                        logMessage('Motion sensor permission granted.');
+                        window.addEventListener('devicemotion', handleDeviceMotion, true);
+                        motionGranted = true;
+                    } else if (motionState !== 'not_requested') {
+                        logMessage('Motion sensor permission denied or error.', 'warn');
+                    }
+
+                    if (orientationState === 'granted') {
+                        logMessage('Orientation sensor permission granted.');
+                        // Use 'deviceorientationabsolute' for better compass on iOS
+                        window.addEventListener('deviceorientationabsolute', handleDeviceOrientation, true);
+                        // Fallback if 'deviceorientationabsolute' is not supported (less common)
+                        window.addEventListener('deviceorientation', handleDeviceOrientation, true);
+                        orientationGranted = true;
+                    } else if (orientationState !== 'not_requested') {
+                        logMessage('Orientation sensor permission denied or error.', 'warn');
+                    }
+
+                    if (motionGranted || orientationGranted) {
+                        permissionSection.classList.add('hidden');
+                        if (!motionGranted && !orientationGranted && !genericMagnetometerAvailable) {
+                             // Only show main content if at least one sensor type is potentially available
+                        } else {
+                            // Show main content if any permission was granted, or if generic magnetometer might work
+                            // Calibration notice for motion sensors will appear if motion events start.
+                            // Compass data will just start plotting if selected.
+                            mainContent.classList.remove('hidden');
+                        }
+                    } else {
+                        logMessage('No primary sensor permissions granted. App may have limited functionality.', 'warn');
+                        // Still show main content so user can try generic magnetometer if available and they didn't grant primary ones
+                         mainContent.classList.remove('hidden');
+                    }
+                     // Always attempt to initialize generic magnetometer (for Chrome on Android, etc.)
+                    initializeGenericMagnetometer();
+                })
+                .catch(error => {
+                    logMessage(`Error requesting sensor permissions: ${error.message}`, 'error');
+                    alert('An error occurred while requesting sensor permissions.');
+                     mainContent.classList.remove('hidden'); // Show content anyway
+                    initializeGenericMagnetometer(); // Still try
+                });
         }
 
         window.addEventListener('load', () => {
-            logMessage('App loaded. Grant permission to start calibration.');
+            logMessage('App loaded. Grant permission to start sensors.');
             sensorChart = createChart('sensorChart');
-            currentSensorKey = sensorSelect.value; // Initialize from HTML
+            currentSensorKey = sensorSelect.value;
             chartTitle.textContent = sensorSelect.options[sensorSelect.selectedIndex].text;
             samplingIntervalSlider.value = (samplingIntervalMs / 1000).toFixed(1);
             samplingIntervalValueDisplay.textContent = `${(samplingIntervalMs / 1000).toFixed(1)} s`;
 
-            requestPermissionButton.addEventListener('click', requestMotionAndOrientationPermissions);
+            requestPermissionButton.addEventListener('click', requestAllSensorPermissions);
+
+            // Initially disable generic magnetometer options; initializeGenericMagnetometer will enable them if API is present.
+            document.querySelectorAll('#sensorSelect option[value^="mag"]').forEach(opt => opt.disabled = true);
+
 
             if (window.navigator.standalone === true) {
                 logMessage('Running in PWA mode (iOS).');
             }
+            // Hide main content until permissions are sorted or calibration starts
+            mainContent.classList.add('hidden');
+            calibrationNotice.classList.add('hidden');
         });
     </script>
 </body>
