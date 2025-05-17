@@ -2,12 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Motion & Orientation Sensor Visualizer</title>
+    <title>Compass Visualizer</title>
 
     <!-- Apple Web App Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <!-- <link rel="apple-touch-icon" href="your-icon.png"> -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -25,13 +24,23 @@
             flex-direction: column;
             gap: 15px;
         }
-        .permission-section, .calibration-notice {
+        .permission-section, .calibration-notice, .compass-display {
             text-align: center;
             padding: 20px;
             background-color: #fff;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 15px;
+        }
+        .compass-display h2 {
+            margin-top: 0;
+            font-size: 1.5em;
+        }
+        .compass-display p {
+            font-size: 2em;
+            font-weight: bold;
+            color: #007bff;
+            margin: 5px 0;
         }
         .controls {
             display: flex;
@@ -54,7 +63,7 @@
             box-sizing: border-box;
         }
         .controls input[type="range"] {
-            padding: 0; /* Override default padding for range */
+            padding: 0;
         }
         .controls button {
             background-color: #007bff;
@@ -67,82 +76,43 @@
         .controls button.active {
             background-color: #28a745;
         }
-        .slider-container {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        .slider-container span {
-            font-size: 0.9em;
-            text-align: center;
-        }
-        .chart-container {
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .chart-container h3 {
-            margin-top: 0;
-            margin-bottom: 10px;
-            font-size: 1.2em;
-            text-align: center;
-        }
-        .logs {
-            margin-top: 20px;
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .logs h3 {
-            margin-top: 0;
-        }
-        .log-area {
-            max-height: 200px; /* Increased height for more logs */
-            overflow-y: auto;
-            border: 1px solid #ccc;
-            padding: 10px;
-            font-size: 0.8em;
-            background-color: #f9f9f9;
-            white-space: pre-wrap;
-        }
+        .slider-container { display: flex; flex-direction: column; gap: 5px; }
+        .slider-container span { font-size: 0.9em; text-align: center; }
+        .chart-container { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .chart-container h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.2em; text-align: center; }
+        .logs { margin-top: 20px; background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .logs h3 { margin-top: 0; }
+        .log-area { max-height: 150px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; font-size: 0.8em; background-color: #f9f9f9; white-space: pre-wrap; }
         .log-entry.error { color: red; font-weight: bold; }
         .log-entry.warn { color: orange; }
-        .log-entry.debug { color: blue; } /* For debug messages */
+        .log-entry.debug { color: blue; }
         .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Motion & Orientation Sensor Visualizer</h1>
+        <h1>Compass Visualizer</h1>
 
         <div id="permissionSection" class="permission-section">
-            <p>This app requires access to your device's motion and orientation sensors.</p>
-            <button id="requestPermissionButton">Grant Sensor Access</button>
+            <p>This app requires access to your device's orientation sensors for compass data.</p>
+            <button id="requestPermissionButton">Grant Orientation Sensor Access</button>
+        </div>
+
+        <div id="compassDisplay" class="compass-display hidden">
+            <h2>Current Raw Compass Heading</h2>
+            <p id="rawCompassValue">--- °</p>
         </div>
 
         <div id="calibrationNotice" class="calibration-notice hidden">
-            <p id="calibrationText">Initializing calibration (for motion sensors)...</p>
+            <p id="calibrationText">Initializing compass calibration...</p>
         </div>
 
         <div id="mainContent" class="hidden">
             <div class="controls">
-                <label for="sensorSelect">Select Sensor Data:</label>
+                <label for="sensorSelect">Select Compass View:</label>
                 <select id="sensorSelect">
-                    <option value="accelX">Accelerometer X (Zero-Adj.)</option>
-                    <option value="accelY">Accelerometer Y (Zero-Adj.)</option>
-                    <option value="accelZ">Accelerometer Z (Zero-Adj.)</option>
-                    <option value="gyroAlpha">Gyroscope Alpha (Z, Zero-Adj.)</option>
-                    <option value="gyroBeta">Gyroscope Beta (X, Zero-Adj.)</option>
-                    <option value="gyroGamma">Gyroscope Gamma (Y, Zero-Adj.)</option>
-                    <option value="compassHeading">Compass Heading (°)</option>
-                    <option value="magX_raw" disabled>Magnetometer X (Raw - If Supported)</option>
-                    <option value="magY_raw" disabled>Magnetometer Y (Raw - If Supported)</option>
-                    <option value="magZ_raw" disabled>Magnetometer Z (Raw - If Supported)</option>
-                    <option value="magX_adj" disabled>Magnetometer X (Zero-Adj. - If Supported)</option>
-                    <option value="magY_adj" disabled>Magnetometer Y (Zero-Adj. - If Supported)</option>
-                    <option value="magZ_adj" disabled>Magnetometer Z (Zero-Adj. - If Supported)</option>
+                    <option value="compass_raw">Compass Heading (Raw °)</option>
+                    <option value="compass_adj">Compass Heading (Zero-Adjusted °)</option>
                 </select>
 
                 <div class="slider-container">
@@ -155,7 +125,7 @@
             </div>
 
             <div class="chart-container">
-                <h3 id="chartTitle">Accelerometer X (Zero-Adj.)</h3>
+                <h3 id="chartTitle">Compass Heading (Raw °)</h3>
                 <canvas id="sensorChart"></canvas>
             </div>
         </div>
@@ -173,12 +143,13 @@
         const SG_DENOMINATOR = 35;
         const MAX_RAW_DATA_STORAGE = MAX_CHART_POINTS;
 
-        const CALIBRATION_DELAY_MS = 10000;
-        const CALIBRATION_DURATION_MS = 30000;
-        const MAGNETOMETER_FREQUENCY = 10; // Hz, for generic Magnetometer API
+        const CALIBRATION_DELAY_MS = 5000; // Shorter delay for compass
+        const CALIBRATION_DURATION_MS = 10000; // Shorter duration for compass
 
         const logArea = document.getElementById('logArea');
         const permissionSection = document.getElementById('permissionSection');
+        const compassDisplayDiv = document.getElementById('compassDisplay');
+        const rawCompassValueEl = document.getElementById('rawCompassValue');
         const calibrationNotice = document.getElementById('calibrationNotice');
         const calibrationText = document.getElementById('calibrationText');
         const mainContent = document.getElementById('mainContent');
@@ -189,64 +160,33 @@
         const samplingIntervalValueDisplay = document.getElementById('samplingIntervalValue');
 
         let sensorChart;
-        let currentSensorKey = 'accelX';
+        let currentSensorKey = 'compass_raw'; // Default to raw compass view
         let samplingIntervalMs = parseFloat(samplingIntervalSlider.value) * 1000;
 
         let sensorData = {
-            accelX: { raw: [], filteredForChart: [], lpfActive: false },
-            accelY: { raw: [], filteredForChart: [], lpfActive: false },
-            accelZ: { raw: [], filteredForChart: [], lpfActive: false },
-            gyroAlpha: { raw: [], filteredForChart: [], lpfActive: false },
-            gyroBeta: { raw: [], filteredForChart: [], lpfActive: false },
-            gyroGamma: { raw: [], filteredForChart: [], lpfActive: false },
-            compassHeading: { raw: [], filteredForChart: [], lpfActive: false },
-            magX_raw: { raw: [], filteredForChart: [], lpfActive: false },
-            magY_raw: { raw: [], filteredForChart: [], lpfActive: false },
-            magZ_raw: { raw: [], filteredForChart: [], lpfActive: false },
-            magX_adj: { raw: [], filteredForChart: [], lpfActive: false },
-            magY_adj: { raw: [], filteredForChart: [], lpfActive: false },
-            magZ_adj: { raw: [], filteredForChart: [], lpfActive: false }
+            compass_raw: { raw: [], filteredForChart: [], lpfActive: false },
+            compass_adj: { raw: [], filteredForChart: [], lpfActive: false }
         };
         let chartLabels = [];
 
-        let calibrationState = 'pending';
+        let calibrationState = 'pending'; // pending, delay, collecting, complete
         let calibrationStartTimestamp;
         let tempCalibrationData = {
-            accelX: [], accelY: [], accelZ: [],
-            gyroAlpha: [], gyroBeta: [], gyroGamma: [],
-            magX: [], magY: [], magZ: []
+            compass: [] // For collecting compass readings during calibration
         };
-        let sensorZeroOffsets = {
-            accelX: 0, accelY: 0, accelZ: 0,
-            gyroAlpha: 0, gyroBeta: 0, gyroGamma: 0,
-            magX: 0, magY: 0, magZ: 0
-        };
-        let lastSampledTime = {
-            accelX: 0, accelY: 0, accelZ: 0,
-            gyroAlpha: 0, gyroBeta: 0, gyroGamma: 0,
-            compassHeading: 0,
-            magX_raw: 0, magY_raw: 0, magZ_raw: 0,
-            magX_adj: 0, magY_adj: 0, magZ_adj: 0
-        };
+        let compassZeroOffset = 0; // The average heading during calibration
 
-        let magnetometerSensor;
-        let genericMagnetometerAvailable = false;
-        let motionSensorsActive = false;
         let orientationSensorActive = false;
-        let orientationEventListenerType = null; // To track which listener is active
+        let orientationEventListenerType = null;
 
         function logMessage(message, type = 'info') {
             const entry = document.createElement('div');
-            entry.classList.add('log-entry');
-            if (type === 'error') entry.classList.add('error');
-            if (type === 'warn') entry.classList.add('warn');
-            if (type === 'debug') entry.classList.add('debug'); // Add debug style
+            entry.classList.add('log-entry', type);
             entry.textContent = `[${new Date().toLocaleTimeString()}] ${type.toUpperCase()}: ${message}`;
             logArea.appendChild(entry);
             logArea.scrollTop = logArea.scrollHeight;
         }
 
-        // ... (createChart, savitzkyGolaySmooth, processSensorDataForChart, updateChart - same as before) ...
         function createChart(canvasId) {
             const ctx = document.getElementById(canvasId).getContext('2d');
             return new Chart(ctx, {
@@ -254,19 +194,18 @@
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'Sensor Value',
+                        label: 'Compass Value (°)', // Will be updated by updateChart
                         data: [],
-                        borderColor: 'rgb(75, 192, 192)',
+                        borderColor: 'rgb(0, 123, 255)', // Blue
                         tension: 0.1,
                         fill: false
                     }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
+                    responsive: true, maintainAspectRatio: true,
                     scales: {
                         x: { title: { display: true, text: 'Time' } },
-                        y: { title: { display: true, text: 'Value' } }
+                        y: { title: { display: true, text: 'Heading (°)' } }
                     },
                     animation: { duration: 0 }
                 }
@@ -274,6 +213,7 @@
         }
 
         function savitzkyGolaySmooth(data) {
+            // ... (same SG filter logic)
             const windowSize = SG_WINDOW_SIZE;
             const coeffs = SG_COEFFICIENTS;
             const denominator = SG_DENOMINATOR;
@@ -310,23 +250,13 @@
             } else {
                 dataObj.filteredForChart = [...currentInputSegmentForChart];
             }
-            logMessage(`DEBUG: Processed data for ${key}. Raw length: ${dataObj.raw.length}, Filtered length: ${dataObj.filteredForChart.length}`, 'debug');
         }
 
         function updateChart() {
-            const canUpdateBeforeMotionCalib = currentSensorKey === 'compassHeading' ||
-                                             (currentSensorKey.startsWith('mag') && currentSensorKey.endsWith('_raw'));
-
-            if (!sensorChart ) {
-                logMessage(`DEBUG: updateChart - sensorChart not ready.`, 'debug');
-                return;
-            }
-            if (!sensorData[currentSensorKey]) {
-                 logMessage(`DEBUG: updateChart - sensorData for ${currentSensorKey} not ready.`, 'debug');
-                return;
-            }
-            if (calibrationState !== 'complete' && !canUpdateBeforeMotionCalib) {
-                logMessage(`DEBUG: updateChart - Calibration not complete for ${currentSensorKey} and not compass/raw_mag. State: ${calibrationState}`, 'debug');
+            if (!sensorChart || !sensorData[currentSensorKey]) return;
+            // Compass data can be shown pre-calibration for raw, or post-calibration for adjusted
+            if (currentSensorKey === 'compass_adj' && calibrationState !== 'complete') {
+                 logMessage(`DEBUG: updateChart - Calibration not complete for ${currentSensorKey}. State: ${calibrationState}`, 'debug');
                 return;
             }
 
@@ -336,139 +266,69 @@
             sensorChart.data.labels = currentLabels;
             sensorChart.data.datasets[0].data = currentFilteredData;
 
-            let unit = "";
-            let valueType = "";
-
-            if (currentSensorKey.startsWith('accel')) { unit = " (m/s²)"; valueType = " (Zero-Adj.)"; }
-            else if (currentSensorKey.startsWith('gyro')) { unit = " (°/s)"; valueType = " (Zero-Adj.)"; }
-            else if (currentSensorKey === 'compassHeading') { unit = " (°)"; valueType = " (Raw)"; }
-            else if (currentSensorKey.startsWith('mag')) {
-                unit = " (μT)";
-                valueType = currentSensorKey.endsWith('_adj') ? " (Zero-Adj.)" : " (Raw)";
-            }
-
-            let labelSuffix = `${valueType}${unit} (sampled every ~${(samplingIntervalMs/1000).toFixed(1)}s)`;
-            sensorChart.data.datasets[0].label = `${chartTitle.textContent}${labelSuffix}`;
+            let valueType = currentSensorKey === 'compass_raw' ? "(Raw °)" : "(Zero-Adjusted °)";
+            sensorChart.data.datasets[0].label = `Compass ${valueType} (Sampled ~${(samplingIntervalMs/1000).toFixed(1)}s)`;
             sensorChart.update();
-            logMessage(`DEBUG: Chart updated for ${currentSensorKey}. Data points: ${currentFilteredData.length}`, 'debug');
         }
 
-
-        function handleCalibrationLogic(eventTime) {
-            if (calibrationState === 'pending' && motionSensorsActive) {
+        function handleCalibrationLogic(eventTime, compassValue) {
+            if (calibrationState === 'pending' && orientationSensorActive) {
                 calibrationStartTimestamp = eventTime;
                 calibrationState = 'delay';
                 calibrationNotice.classList.remove('hidden');
-                calibrationText.textContent = `Calibration (Motion): Delay phase for ${CALIBRATION_DELAY_MS / 1000}s. Keep device still.`;
-                logMessage(`Motion sensor calibration sequence started. Delay phase (${CALIBRATION_DELAY_MS / 1000}s).`);
+                compassDisplayDiv.classList.remove('hidden'); // Show raw display now
+                calibrationText.textContent = `Compass Calibration: Delay phase for ${CALIBRATION_DELAY_MS / 1000}s. Keep device pointed in a reference direction.`;
+                logMessage(`Compass calibration sequence started. Delay phase (${CALIBRATION_DELAY_MS / 1000}s). Keep device still/pointed.`, 'info');
                 return true;
             }
+
             if (calibrationState === 'delay') {
                 if (eventTime >= calibrationStartTimestamp + CALIBRATION_DELAY_MS) {
                     calibrationState = 'collecting';
-                    calibrationStartTimestamp = eventTime;
-                    calibrationText.textContent = `Calibration (Motion): Collecting data for ${CALIBRATION_DURATION_MS / 1000}s. Keep device still.`;
-                    logMessage(`Motion calibration delay complete. Collecting data for zeroing (${CALIBRATION_DURATION_MS / 1000}s).`);
+                    calibrationStartTimestamp = eventTime; // Reset for collection duration
+                    tempCalibrationData.compass = []; // Clear previous collection
+                    calibrationText.textContent = `Compass Calibration: Collecting data for ${CALIBRATION_DURATION_MS / 1000}s. Keep device still/pointed.`;
+                    logMessage(`Compass calibration delay complete. Collecting data for zeroing (${CALIBRATION_DURATION_MS / 1000}s).`, 'info');
                 } else {
                     const timeLeft = Math.round((calibrationStartTimestamp + CALIBRATION_DELAY_MS - eventTime) / 1000);
-                    calibrationText.textContent = `Calibration (Motion): Delay phase... ${timeLeft}s remaining. Keep still.`;
+                    calibrationText.textContent = `Compass Calibration: Delay phase... ${timeLeft}s remaining. Keep device still/pointed.`;
                     return true;
                 }
             }
+
             if (calibrationState === 'collecting') {
+                if (compassValue !== null) { // Only add valid compass values
+                    tempCalibrationData.compass.push(compassValue);
+                }
                 if (eventTime >= calibrationStartTimestamp + CALIBRATION_DURATION_MS) {
                     calibrationState = 'complete';
-                    calibrationText.textContent = 'Motion sensor calibration complete!';
-                    logMessage('Motion sensor calibration data collection complete. Calculating zero offsets...');
-                    ['accelX', 'accelY', 'accelZ', 'gyroAlpha', 'gyroBeta', 'gyroGamma'].forEach(key => {
-                        const sum = tempCalibrationData[key].reduce((s, v) => s + v, 0);
-                        sensorZeroOffsets[key] = tempCalibrationData[key].length > 0 ? sum / tempCalibrationData[key].length : 0;
-                        logMessage(`Zero offset for ${key}: ${sensorZeroOffsets[key].toFixed(4)}`);
-                        tempCalibrationData[key] = [];
-                    });
-                    if (genericMagnetometerAvailable) {
-                        ['magX', 'magY', 'magZ'].forEach(key => {
-                            if (tempCalibrationData[key] && tempCalibrationData[key].length > 0) {
-                                const sum = tempCalibrationData[key].reduce((s, v) => s + v, 0);
-                                sensorZeroOffsets[key] = sum / tempCalibrationData[key].length;
-                                logMessage(`Zero offset for Generic ${key}: ${sensorZeroOffsets[key].toFixed(4)}`);
-                                tempCalibrationData[key] = [];
-                            }
-                        });
-                    }
-                    logMessage('Motion sensor calibration complete. Plotting zero-adjusted values.');
-                    ['accelX', 'accelY', 'accelZ', 'gyroAlpha', 'gyroBeta', 'gyroGamma'].forEach(key => {
-                        sensorData[key].raw = []; sensorData[key].filteredForChart = [];
-                        lastSampledTime[key] = 0;
-                    });
-                    if (genericMagnetometerAvailable) {
-                        ['magX_adj', 'magY_adj', 'magZ_adj'].forEach(key => {
-                             sensorData[key].raw = []; sensorData[key].filteredForChart = [];
-                             lastSampledTime[key] = 0;
-                        });
-                    }
-                    chartLabels = [];
-                    setTimeout(() => calibrationNotice.classList.add('hidden'), 3000);
-                    if (!mainContent.classList.contains('hidden')) { // Ensure main content is visible
-                        updateChart();
+                    calibrationText.textContent = 'Compass calibration complete!';
+                    logMessage('Compass calibration data collection complete. Calculating zero offset...', 'info');
+
+                    if (tempCalibrationData.compass.length > 0) {
+                        const sum = tempCalibrationData.compass.reduce((s, v) => s + v, 0);
+                        compassZeroOffset = sum / tempCalibrationData.compass.length;
+                        logMessage(`Compass zero offset calculated: ${compassZeroOffset.toFixed(2)}° from ${tempCalibrationData.compass.length} samples.`, 'info');
                     } else {
-                        logMessage('DEBUG: Main content hidden post-calibration, chart not updated immediately.', 'debug');
+                        compassZeroOffset = 0;
+                        logMessage('No compass data collected during calibration. Zero offset set to 0.', 'warn');
                     }
+                    tempCalibrationData.compass = []; // Clear
+                    // Clear existing chart data for both raw and adjusted views
+                    sensorData.compass_raw.raw = []; sensorData.compass_raw.filteredForChart = [];
+                    sensorData.compass_adj.raw = []; sensorData.compass_adj.filteredForChart = [];
+                    chartLabels = [];
+
+                    setTimeout(() => calibrationNotice.classList.add('hidden'), 3000);
+                    mainContent.classList.remove('hidden');
+                    updateChart(); // Update chart, possibly showing empty adjusted data initially
                 } else {
                     const timeLeft = Math.round((calibrationStartTimestamp + CALIBRATION_DURATION_MS - eventTime) / 1000);
-                    calibrationText.textContent = `Calibration (Motion): Collecting data... ${timeLeft}s remaining. Keep still.`;
+                    calibrationText.textContent = `Compass Calibration: Collecting data... ${tempCalibrationData.compass.length} samples, ${timeLeft}s remaining. Keep still/pointed.`;
                     return true;
                 }
             }
             return false;
-        }
-
-        function handleDeviceMotion(event) {
-            const currentTime = Date.now();
-            if (!motionSensorsActive) {
-                logMessage('First devicemotion event received.', 'info');
-                motionSensorsActive = true;
-            }
-
-            if (handleCalibrationLogic(currentTime)) {
-                if (calibrationState !== 'complete') return;
-            }
-
-            const acc = event.accelerationIncludingGravity;
-            const rot = event.rotationRate;
-            const incomingMotionValues = {
-                accelX: acc ? acc.x || 0 : 0, accelY: acc ? acc.y || 0 : 0, accelZ: acc ? acc.z || 0 : 0,
-                gyroAlpha: rot ? rot.alpha || 0 : 0, gyroBeta: rot ? rot.beta || 0 : 0, gyroGamma: rot ? rot.gamma || 0 : 0,
-            };
-
-            if (calibrationState === 'collecting') {
-                Object.keys(incomingMotionValues).forEach(key => {
-                    if (tempCalibrationData[key]) {
-                        tempCalibrationData[key].push(incomingMotionValues[key]);
-                    }
-                });
-            }
-
-            if (calibrationState === 'complete') {
-                let processedCurrentSensorThisTick = false;
-                Object.keys(incomingMotionValues).forEach(key => {
-                    if (currentTime >= (lastSampledTime[key] || 0) + samplingIntervalMs) {
-                        lastSampledTime[key] = currentTime;
-                        const zeroAdjustedValue = incomingMotionValues[key] - (sensorZeroOffsets[key] || 0);
-                        processSensorDataForChart(key, zeroAdjustedValue);
-                        if (key === currentSensorKey) {
-                            processedCurrentSensorThisTick = true;
-                        }
-                    }
-                });
-
-                if (processedCurrentSensorThisTick) {
-                    const nowLabel = new Date(currentTime).toLocaleTimeString().split(" ")[0];
-                    if (chartLabels.length >= MAX_CHART_POINTS) chartLabels.shift();
-                    chartLabels.push(nowLabel);
-                    updateChart();
-                }
-            }
         }
 
         function handleDeviceOrientation(event) {
@@ -478,96 +338,52 @@
                 orientationSensorActive = true;
             }
 
-            logMessage(`DEBUG: ${orientationEventListenerType} Event: alpha=${event.alpha?.toFixed(2)}, beta=${event.beta?.toFixed(2)}, gamma=${event.gamma?.toFixed(2)}, absolute=${event.absolute}, webkitCompassHeading=${event.webkitCompassHeading?.toFixed(2)}`, 'debug');
+            let rawCompass = null;
+            if (event.absolute === true && typeof event.alpha === 'number') {
+                rawCompass = event.alpha;
+            } else if (typeof event.webkitCompassHeading === 'number') {
+                rawCompass = event.webkitCompassHeading;
+            }
+            // Log all relevant properties for debugging, even if not used for rawCompass
+            logMessage(`DEBUG: ${orientationEventListenerType} Event: alpha=${event.alpha?.toFixed(1)}, abs=${event.absolute}, webkitCH=${event.webkitCompassHeading?.toFixed(1)}`, 'debug');
 
-            // Ensure main content is visible before trying to plot
-            if (mainContent.classList.contains('hidden')) {
-                logMessage('DEBUG: Orientation event, but main content is hidden. Skipping plot.', 'debug');
+
+            if (rawCompass !== null) {
+                rawCompassValueEl.textContent = `${rawCompass.toFixed(1)} °`;
+                compassDisplayDiv.classList.remove('hidden'); // Ensure it's visible
+            } else {
+                rawCompassValueEl.textContent = `--- ° (No valid data)`;
+            }
+
+            if (handleCalibrationLogic(currentTime, rawCompass)) {
+                // If calibration logic is active (delay or collecting), don't plot yet
                 return;
             }
 
-            let compassValue = null;
-            if (event.absolute === true && event.alpha !== null && typeof event.alpha !== 'undefined') {
-                compassValue = event.alpha;
-                logMessage(`DEBUG: Using event.alpha (absolute) for compass: ${compassValue.toFixed(2)}`, 'debug');
-            } else if (typeof event.webkitCompassHeading !== 'undefined' && event.webkitCompassHeading !== null) {
-                // Fallback for older WebKit browsers or if absolute alpha is not available
-                // Note: webkitCompassHeading might not be true north, could be magnetic north without declination
-                compassValue = event.webkitCompassHeading;
-                logMessage(`DEBUG: Using event.webkitCompassHeading for compass: ${compassValue.toFixed(2)}`, 'debug');
-            } else if (event.alpha !== null && typeof event.alpha !== 'undefined') {
-                // If absolute is false or undefined, but alpha exists, log it but maybe don't use for "compass"
-                logMessage(`DEBUG: event.alpha exists but not absolute: ${event.alpha.toFixed(2)}. Consider if this is useful.`, 'debug');
-                // For now, we won't use non-absolute alpha as "compass heading"
-                // compassValue = event.alpha; // Uncomment if you want to use relative alpha
-            }
-
-
-            if (compassValue !== null) {
-                if (currentSensorKey === 'compassHeading') {
-                    logMessage(`DEBUG: Current sensor is compassHeading. Checking sampling interval.`, 'debug');
-                    if (currentTime >= (lastSampledTime['compassHeading'] || 0) + samplingIntervalMs) {
-                        lastSampledTime['compassHeading'] = currentTime;
-                        logMessage(`DEBUG: Sampling interval passed for compass. Processing value: ${compassValue.toFixed(2)}`, 'debug');
-                        processSensorDataForChart('compassHeading', compassValue);
-
-                        const nowLabel = new Date(currentTime).toLocaleTimeString().split(" ")[0];
-                        if (chartLabels.length >= MAX_CHART_POINTS) chartLabels.shift();
-                        chartLabels.push(nowLabel);
-                        updateChart();
-                    } else {
-                        logMessage(`DEBUG: Sampling interval NOT passed for compass. Last: ${lastSampledTime['compassHeading']}, Current: ${currentTime}, Interval: ${samplingIntervalMs}`, 'debug');
-                    }
-                } else {
-                     logMessage(`DEBUG: Compass value available (${compassValue.toFixed(2)}), but currentSensorKey is ${currentSensorKey}.`, 'debug');
-                }
-            } else {
-                logMessage('DEBUG: No suitable compass value found in orientation event.', 'debug');
-            }
-        }
-
-        // ... (Generic Magnetometer Handling - same as before) ...
-        function handleMagnetometerReading() {
-            if (!magnetometerSensor) return;
-            const currentTime = Date.now();
-            if(!genericMagnetometerAvailable) logMessage('First Generic Magnetometer reading received.', 'info');
-            genericMagnetometerAvailable = true;
-
-            const rawMagValues = {
-                magX: magnetometerSensor.x || 0,
-                magY: magnetometerSensor.y || 0,
-                magZ: magnetometerSensor.z || 0
-            };
-
-            if (calibrationState === 'collecting') {
-                tempCalibrationData.magX.push(rawMagValues.magX);
-                tempCalibrationData.magY.push(rawMagValues.magY);
-                tempCalibrationData.magZ.push(rawMagValues.magZ);
-            }
-
-            if (calibrationState === 'complete' || currentSensorKey.endsWith("_raw")) {
+            // Plotting logic, only if calibration is complete OR if viewing raw data
+            if (rawCompass !== null && (calibrationState === 'complete' || currentSensorKey === 'compass_raw')) {
                 let processedCurrentSensorThisTick = false;
-                const keysToProcess = ['magX_raw', 'magY_raw', 'magZ_raw', 'magX_adj', 'magY_adj', 'magZ_adj'];
 
-                keysToProcess.forEach(chartKey => {
-                    if (currentTime >= (lastSampledTime[chartKey] || 0) + samplingIntervalMs) {
-                        lastSampledTime[chartKey] = currentTime;
-                        const baseKey = chartKey.substring(0, 4);
-                        const rawValue = rawMagValues[baseKey];
-                        let valueToProcess;
-
-                        if (chartKey.endsWith('_raw')) {
-                            valueToProcess = rawValue;
-                        } else {
-                            if (calibrationState !== 'complete') return;
-                            valueToProcess = rawValue - (sensorZeroOffsets[baseKey] || 0);
-                        }
-                        processSensorDataForChart(chartKey, valueToProcess);
-                        if (chartKey === currentSensorKey) {
-                            processedCurrentSensorThisTick = true;
-                        }
+                // Process for raw view
+                if (currentTime >= (lastSampledTime['compass_raw'] || 0) + samplingIntervalMs) {
+                    lastSampledTime['compass_raw'] = currentTime;
+                    processSensorDataForChart('compass_raw', rawCompass);
+                    if (currentSensorKey === 'compass_raw') {
+                        processedCurrentSensorThisTick = true;
                     }
-                });
+                }
+
+                // Process for adjusted view (only if calibration is complete)
+                if (calibrationState === 'complete' && currentTime >= (lastSampledTime['compass_adj'] || 0) + samplingIntervalMs) {
+                    lastSampledTime['compass_adj'] = currentTime;
+                    // Calculate adjusted value with wraparound
+                    let adjustedCompass = (rawCompass - compassZeroOffset + 360) % 360;
+                    processSensorDataForChart('compass_adj', adjustedCompass);
+                    if (currentSensorKey === 'compass_adj') {
+                        processedCurrentSensorThisTick = true;
+                    }
+                }
+
                 if (processedCurrentSensorThisTick) {
                     const nowLabel = new Date(currentTime).toLocaleTimeString().split(" ")[0];
                     if (chartLabels.length >= MAX_CHART_POINTS) chartLabels.shift();
@@ -577,44 +393,13 @@
             }
         }
 
-        function handleMagnetometerError(event) {
-            logMessage(`Generic Magnetometer Error: ${event.error.name} - ${event.error.message}. Raw X,Y,Z magnetometer data may not be available.`, 'warn');
-            genericMagnetometerAvailable = false;
-            document.querySelectorAll('#sensorSelect option[value^="mag"]').forEach(opt => opt.disabled = true);
-        }
-
-        function initializeGenericMagnetometer() {
-            if ('Magnetometer' in window) {
-                try {
-                    logMessage('Attempting to initialize Generic Magnetometer sensor...');
-                    magnetometerSensor = new Magnetometer({ frequency: MAGNETOMETER_FREQUENCY });
-                    magnetometerSensor.addEventListener('reading', handleMagnetometerReading);
-                    magnetometerSensor.addEventListener('error', handleMagnetometerError);
-                    magnetometerSensor.start();
-                    logMessage('Generic Magnetometer sensor started (if supported).');
-                    document.querySelectorAll('#sensorSelect option[value^="mag"]').forEach(opt => opt.disabled = false);
-                } catch (error) {
-                    logMessage(`Failed to initialize Generic Magnetometer: ${error.name} - ${error.message}. This sensor may not be supported.`, 'warn');
-                    genericMagnetometerAvailable = false;
-                    document.querySelectorAll('#sensorSelect option[value^="mag"]').forEach(opt => opt.disabled = true);
-                }
-            } else {
-                logMessage('Generic Magnetometer API not supported by this browser. Raw X,Y,Z magnetometer data will not be available.', 'warn');
-                genericMagnetometerAvailable = false;
-                document.querySelectorAll('#sensorSelect option[value^="mag"]').forEach(opt => opt.disabled = true);
-            }
-        }
-
-        // ... (samplingIntervalSlider, updateFilterButtonState, sensorSelect, filterButton listeners - same as before, check for DEBUG logs if needed) ...
-         samplingIntervalSlider.addEventListener('input', (e) => {
+        samplingIntervalSlider.addEventListener('input', (e) => {
             samplingIntervalMs = parseFloat(e.target.value) * 1000;
             samplingIntervalValueDisplay.textContent = `${parseFloat(e.target.value).toFixed(1)} s`;
             logMessage(`Sampling interval set to ${parseFloat(e.target.value).toFixed(1)}s.`);
-            Object.keys(lastSampledTime).forEach(key => lastSampledTime[key] = 0);
-            Object.keys(sensorData).forEach(key => {
-                sensorData[key].raw = [];
-                sensorData[key].filteredForChart = [];
-            });
+            Object.keys(lastSampledTime).forEach(key => lastSampledTime[key] = 0); // Reset sampling times
+            sensorData.compass_raw.raw = []; sensorData.compass_raw.filteredForChart = [];
+            sensorData.compass_adj.raw = []; sensorData.compass_adj.filteredForChart = [];
             chartLabels = [];
             updateChart();
             logMessage('Chart data cleared due to sampling interval change.');
@@ -629,34 +414,26 @@
 
         sensorSelect.addEventListener('change', (e) => {
             const newSensorKey = e.target.value;
-            const isMotionSensor = ['accelX', 'accelY', 'accelZ', 'gyroAlpha', 'gyroBeta', 'gyroGamma'].includes(newSensorKey);
-            const isAdjustedMag = newSensorKey.startsWith('mag') && newSensorKey.endsWith('_adj');
-
-            if (calibrationState !== 'complete' && (isMotionSensor || isAdjustedMag)) {
-                logMessage('Please wait for motion sensor calibration to complete before viewing its adjusted values.', 'warn');
-                e.target.value = currentSensorKey;
+            if (newSensorKey === 'compass_adj' && calibrationState !== 'complete') {
+                logMessage('Please wait for compass calibration to complete before viewing adjusted values.', 'warn');
+                e.target.value = currentSensorKey; // Revert
                 return;
             }
-
             currentSensorKey = newSensorKey;
             chartTitle.textContent = e.target.options[e.target.selectedIndex].text;
-            logMessage(`Switched to sensor: ${chartTitle.textContent}`);
+            logMessage(`Switched to sensor view: ${chartTitle.textContent}`);
             updateFilterButtonState();
-
+            // Re-populate labels based on existing data for the new view
             chartLabels = [];
             const dataLength = sensorData[currentSensorKey] ? sensorData[currentSensorKey].filteredForChart.length : 0;
             const now = new Date().toLocaleTimeString().split(" ")[0];
-            for(let i=0; i< dataLength; i++) chartLabels.push(now);
-
+            for(let i=0; i< dataLength; i++) chartLabels.push(now); // Fill with placeholder labels
             updateChart();
         });
 
         filterButton.addEventListener('click', () => {
-            const isMotionSensor = ['accelX', 'accelY', 'accelZ', 'gyroAlpha', 'gyroBeta', 'gyroGamma'].includes(currentSensorKey);
-            const isAdjustedMag = currentSensorKey.startsWith('mag') && currentSensorKey.endsWith('_adj');
-
-            if (calibrationState !== 'complete' && (isMotionSensor || isAdjustedMag)) {
-                logMessage('Please wait for motion sensor calibration to complete before toggling filter on its adjusted values.', 'warn');
+            if (currentSensorKey === 'compass_adj' && calibrationState !== 'complete') {
+                logMessage('Please wait for compass calibration to complete before toggling filter on adjusted values.', 'warn');
                 return;
             }
             if (!sensorData[currentSensorKey]) return;
@@ -675,98 +452,50 @@
             updateChart();
         });
 
-
-        function requestAllSensorPermissions() {
-            logMessage('Attempting to request sensor permissions...');
-            let motionPermissionPromise = Promise.resolve({ status: 'not_requested', type: 'motion' });
-            let orientationPermissionPromise = Promise.resolve({ status: 'not_requested', type: 'orientation' });
-
-            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-                logMessage('DEBUG: DeviceMotionEvent.requestPermission available.', 'debug');
-                motionPermissionPromise = DeviceMotionEvent.requestPermission()
-                    .then(status => ({ status, type: 'motion' }))
-                    .catch(err => {
-                        logMessage(`Motion permission request error: ${err.message}`, 'error');
-                        return { status: 'error', type: 'motion', error: err };
-                    });
-            } else if (typeof DeviceMotionEvent !== 'undefined') {
-                logMessage('DEBUG: DeviceMotionEvent available, assuming granted or no explicit request needed.', 'debug');
-                motionPermissionPromise = Promise.resolve({ status: 'granted', type: 'motion' });
-            } else {
-                logMessage('DeviceMotionEvent API not supported.', 'warn');
-            }
-
+        function requestOrientationPermission() {
+            logMessage('Attempting to request orientation sensor permission...');
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                logMessage('DEBUG: DeviceOrientationEvent.requestPermission available.', 'debug');
-                orientationPermissionPromise = DeviceOrientationEvent.requestPermission()
-                    .then(status => ({ status, type: 'orientation' }))
-                    .catch(err => {
-                        logMessage(`Orientation permission request error: ${err.message}`, 'error');
-                        return { status: 'error', type: 'orientation', error: err };
-                    });
-            } else if (typeof DeviceOrientationEvent !== 'undefined') {
-                logMessage('DEBUG: DeviceOrientationEvent available, assuming granted or no explicit request needed.', 'debug');
-                orientationPermissionPromise = Promise.resolve({ status: 'granted', type: 'orientation' });
-            } else {
-                logMessage('DeviceOrientationEvent API not supported.', 'warn');
-            }
-
-            Promise.all([motionPermissionPromise, orientationPermissionPromise])
-                .then(results => {
-                    let motionGranted = false;
-                    let orientationGranted = false;
-
-                    results.forEach(result => {
-                        logMessage(`Permission result for ${result.type}: ${result.status}`, 'info');
-                        if (result.type === 'motion' && result.status === 'granted') {
-                            logMessage('Adding devicemotion listener.', 'info');
-                            window.addEventListener('devicemotion', handleDeviceMotion, true);
-                            motionGranted = true;
-                        }
-                        if (result.type === 'orientation' && result.status === 'granted') {
-                            logMessage('Adding deviceorientation listeners (absolute then standard).', 'info');
-                            // Prefer 'deviceorientationabsolute' for compass on iOS
-                            orientationEventListenerType = 'deviceorientationabsolute';
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        logMessage(`Orientation permission state: ${permissionState}`, 'info');
+                        if (permissionState === 'granted') {
+                            orientationEventListenerType = 'deviceorientationabsolute'; // Prefer this
                             window.addEventListener('deviceorientationabsolute', handleDeviceOrientation, true);
-                            // Fallback listener in case 'absolute' doesn't fire on some devices
-                            // but only if absolute one isn't the primary one that fires
-                            // For simplicity, let's add both and handleDeviceOrientation can log which type it is
-                            window.addEventListener('deviceorientation', (event) => {
+                            window.addEventListener('deviceorientation', (event) => { // Fallback
                                 if (orientationEventListenerType !== 'deviceorientationabsolute' || !orientationSensorActive) {
-                                     // If absolute hasn't fired yet, or isn't the primary, let standard one take over type logging
                                     orientationEventListenerType = 'deviceorientation';
                                 }
                                 handleDeviceOrientation(event);
                             }, true);
-                            orientationGranted = true;
+                            permissionSection.classList.add('hidden');
+                            // Calibration will start once first orientation event is received
+                            // Main content will be shown by calibration logic or if raw data is viewed
+                            logMessage('Orientation permission granted. Waiting for first event to start calibration.', 'info');
+                        } else {
+                            logMessage('Orientation sensor permission denied by user.', 'error');
+                            alert('Permission denied. Compass data will not be available.');
                         }
+                    })
+                    .catch(error => {
+                        logMessage(`Error requesting orientation permission: ${error.name} - ${error.message}`, 'error');
+                        alert('An error occurred while requesting permission: ' + error.message);
                     });
-
-                    if (motionGranted || orientationGranted || genericMagnetometerAvailable) { // Show content if any sensor has a chance
-                        permissionSection.classList.add('hidden');
-                        mainContent.classList.remove('hidden');
-                        if(motionGranted && calibrationState === 'pending') {
-                            // Trigger calibration if motion is granted and not yet started
-                            // (handleDeviceMotion will also do this, but this can be a bit more direct)
-                            logMessage("DEBUG: Motion granted, ensuring calibration starts if pending.", "debug");
-                        }
-                         logMessage("DEBUG: Main content shown.", "debug");
-                    } else if(results.every(r => r.status === 'denied' || r.status === 'error' || r.status === 'not_supported')) {
-                        logMessage('No sensor permissions were granted. App functionality will be limited.', 'warn');
-                        // Still show main content so user can see logs etc.
-                         mainContent.classList.remove('hidden');
-                    } else {
-                         logMessage('DEBUG: Sensor permission status uncertain, showing main content.', 'debug');
-                         mainContent.classList.remove('hidden');
+            } else if (typeof DeviceOrientationEvent !== 'undefined') {
+                logMessage('DeviceOrientationEvent available (no specific permission needed or already granted). Adding listeners.', 'info');
+                orientationEventListenerType = 'deviceorientationabsolute';
+                window.addEventListener('deviceorientationabsolute', handleDeviceOrientation, true);
+                window.addEventListener('deviceorientation', (event) => {
+                    if (orientationEventListenerType !== 'deviceorientationabsolute' || !orientationSensorActive) {
+                        orientationEventListenerType = 'deviceorientation';
                     }
-                    initializeGenericMagnetometer();
-                })
-                .catch(error => {
-                    logMessage(`Error in Promise.all for sensor permissions: ${error.message}`, 'error');
-                    alert('An error occurred while setting up sensor permissions.');
-                    mainContent.classList.remove('hidden');
-                    initializeGenericMagnetometer();
-                });
+                    handleDeviceOrientation(event);
+                }, true);
+                permissionSection.classList.add('hidden');
+                // Main content will be shown by calibration logic or if raw data is viewed
+            } else {
+                logMessage('DeviceOrientationEvent API not supported on this browser.', 'error');
+                alert('Device Orientation API not supported. This app will not work.');
+            }
         }
 
         window.addEventListener('load', () => {
@@ -777,14 +506,14 @@
             samplingIntervalSlider.value = (samplingIntervalMs / 1000).toFixed(1);
             samplingIntervalValueDisplay.textContent = `${(samplingIntervalMs / 1000).toFixed(1)} s`;
 
-            requestPermissionButton.addEventListener('click', requestAllSensorPermissions);
-            document.querySelectorAll('#sensorSelect option[value^="mag"]').forEach(opt => opt.disabled = true);
+            requestPermissionButton.addEventListener('click', requestOrientationPermission);
 
             if (window.navigator.standalone === true) {
-                logMessage('Running in PWA mode (iOS).', 'info');
+                logMessage('Running in PWA mode (iOS).');
             }
             mainContent.classList.add('hidden');
             calibrationNotice.classList.add('hidden');
+            compassDisplayDiv.classList.add('hidden');
         });
     </script>
 </body>
