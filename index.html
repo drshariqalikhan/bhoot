@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Fixed-Scale Orientation Visualizer</title>
+    <title>Configurable Orientation Visualizer</title>
 
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -10,9 +10,9 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif; margin: 0; padding: 10px; background-color: #f0f0f0; color: #333; overscroll-behavior-y: contain; font-size: 14px; } /* Slightly smaller base font */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif; margin: 0; padding: 10px; background-color: #f0f0f0; color: #333; overscroll-behavior-y: contain; font-size: 14px; }
         .container { display: flex; flex-direction: column; gap: 12px; }
-        .permission-section, .calibration-notice, .detailed-values-display, .controls, .chart-container, .logs {
+        .permission-section, .calibration-notice, .detailed-values-display, .controls, .chart-container, .logs, .interval-controls {
             text-align: center; padding: 12px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 12px;
         }
         .detailed-values-display { text-align: left; }
@@ -21,15 +21,20 @@
         .value-grid strong { font-weight: normal; color: #555; text-align: right; }
         .value-grid span { font-family: "SF Mono", Menlo, Monaco, monospace; font-weight: bold; color: #333; word-break: break-all; }
 
-        .controls label { margin-bottom: 5px; font-weight: bold; display: block; font-size: 0.9em; }
+        .controls label, .interval-controls label { margin-bottom: 5px; font-weight: bold; display: block; font-size: 0.9em; }
         .controls select { padding: 8px; border-radius: 5px; border: 1px solid #ccc; font-size: 0.9em; box-sizing: border-box; width: 100%; max-width: 280px; margin: 0 auto; }
         
+        .interval-controls .slider-container { margin-bottom: 10px; }
+        .interval-controls input[type="range"] { width: 80%; max-width: 250px; margin: 0 5px; vertical-align: middle;}
+        .interval-controls .interval-value { font-size: 0.9em; font-family: monospace; min-width: 50px; display: inline-block; text-align: left;}
+
+
         .chart-container h3 { margin-top: 0; margin-bottom: 8px; font-size: 1.1em; }
         .permission-section button { padding: 10px 18px; border-radius: 5px; border: none; font-size: 0.9em; background-color: #007bff; color: white; cursor: pointer; }
         .permission-section button:hover { background-color: #0056b3; }
 
         .logs h3 { margin-top: 0; }
-        .log-area { max-height: 120px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; font-size: 0.75em; background-color: #f9f9f9; white-space: pre-wrap; text-align: left; }
+        .log-area { max-height: 100px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; font-size: 0.75em; background-color: #f9f9f9; white-space: pre-wrap; text-align: left; }
         .log-entry.error { color: red; font-weight: bold; }
         .log-entry.warn { color: orange; }
         .log-entry.debug { color: blue; }
@@ -39,7 +44,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Fixed-Scale Orientation Visualizer</h1>
+        <h1>Configurable Orientation Visualizer</h1>
 
         <div id="permissionSection" class="permission-section">
             <p>This app requires access to your device's orientation sensors.</p>
@@ -58,6 +63,21 @@
                 <strong>Zero-Adjusted Value:</strong> <span id="currentAdjustedValue">---</span>
             </div>
         </div>
+        
+        <div id="intervalControls" class="interval-controls hidden">
+            <h3>Update Intervals:</h3>
+            <div class="slider-container">
+                <label for="detailIntervalSlider">Detailed Values Update (ms):</label>
+                <input type="range" id="detailIntervalSlider" min="100" max="2000" step="50" value="200">
+                <span class="interval-value" id="detailIntervalValue">200 ms</span>
+            </div>
+            <div class="slider-container">
+                <label for="chartIntervalSlider">Chart Update (ms):</label>
+                <input type="range" id="chartIntervalSlider" min="200" max="5000" step="100" value="500">
+                <span class="interval-value" id="chartIntervalValue">500 ms</span>
+            </div>
+        </div>
+
 
         <div id="mainContent" class="hidden">
             <div class="controls">
@@ -85,7 +105,7 @@
     <script>
         const MAX_CHART_POINTS = 100;
         const CALIBRATION_DURATION_S = 20;
-        const Y_AXIS_FREEZE_DELAY_S = 3; // Seconds after chart starts before Y-axis freezes
+        const Y_AXIS_FREEZE_DELAY_S = 3;
 
         // DOM Elements
         const logArea = document.getElementById('logArea');
@@ -98,6 +118,11 @@
         const currentRawValueEl = document.getElementById('currentRawValue');
         const currentZeroOffsetEl = document.getElementById('currentZeroOffset');
         const currentAdjustedValueEl = document.getElementById('currentAdjustedValue');
+        const intervalControlsDiv = document.getElementById('intervalControls'); // New
+        const detailIntervalSlider = document.getElementById('detailIntervalSlider'); // New
+        const detailIntervalValueEl = document.getElementById('detailIntervalValue'); // New
+        const chartIntervalSlider = document.getElementById('chartIntervalSlider'); // New
+        const chartIntervalValueEl = document.getElementById('chartIntervalValue'); // New
         const mainContent = document.getElementById('mainContent');
         const sensorSelect = document.getElementById('sensorSelect');
         const chartTitleEl = document.getElementById('chartTitle');
@@ -117,7 +142,7 @@
             gamma: { values: [], labels: [] },
             webkitCompassHeading: { values: [], labels: [] }
         };
-        let lastRawValues = { alpha: null, beta: null, gamma: null, webkitCompassHeading: null }; // Store latest raw for display
+        let lastRawValues = { alpha: null, beta: null, gamma: null, webkitCompassHeading: null };
 
         // Chart Y-axis freeze logic
         let chartStartTime = null;
@@ -130,11 +155,11 @@
         let orientationEventListenerType = null;
         let lastSensorEventData = null;
         
-        const DETAIL_DISPLAY_UPDATE_INTERVAL_MS = 200; // ~5Hz
+        let detailDisplayUpdateIntervalMs = parseInt(detailIntervalSlider.value); // From slider
         let lastDetailDisplayUpdateTime = 0;
         let detailDisplayUpdateLoopId = null;
 
-        const CHART_UPDATE_INTERVAL_MS = 500; // ~2Hz
+        let chartUpdateIntervalMs = parseInt(chartIntervalSlider.value); // From slider
         let lastChartUpdateTime = 0;
         let chartUpdateLoopId = null;
 
@@ -146,7 +171,7 @@
             logArea.scrollTop = logArea.scrollHeight;
         }
 
-        function formatSensorValue(value, precision = 8) { // High precision
+        function formatSensorValue(value, precision = 8) {
             if (value === null || typeof value === 'undefined') return '---';
             if (typeof value === 'boolean') return value.toString();
             if (typeof value === 'number') {
@@ -157,6 +182,7 @@
         }
 
         function createChart() {
+             // ... (same as before)
             const ctx = document.getElementById('orientationChart').getContext('2d');
             return new Chart(ctx, {
                 type: 'line',
@@ -165,7 +191,7 @@
                     responsive: true, maintainAspectRatio: true,
                     scales: {
                         x: { title: { display: true, text: 'Time' } },
-                        y: { title: { display: true, text: 'Adjusted Value' }, min: undefined, max: undefined } // Initially undefined
+                        y: { title: { display: true, text: 'Adjusted Value' }, min: undefined, max: undefined }
                     },
                     animation: { duration: 0 }
                 }
@@ -173,11 +199,13 @@
         }
 
         function handleCalibrationLogic(eventData) {
+            // ... (same as before)
             if (calibrationState === 'pending' && orientationSensorActive) {
                 calibrationState = 'collecting';
                 calibrationStartTime = Date.now();
                 calibrationNotice.classList.remove('hidden');
                 detailedValuesDisplayDiv.classList.remove('hidden');
+                intervalControlsDiv.classList.remove('hidden'); // Show interval controls
                 logMessage(`Calibration started. Collecting data for ${CALIBRATION_DURATION_S} seconds. Keep device relatively still.`, 'info');
             }
 
@@ -202,7 +230,7 @@
                     });
                     calibrationNotice.classList.add('hidden');
                     mainContent.classList.remove('hidden');
-                    chartStartTime = Date.now(); // Mark when charting begins for Y-axis freeze
+                    chartStartTime = Date.now();
                     if (!chartUpdateLoopId) startChartUpdateLoop();
                     logMessage('Calibration complete. Displaying zero-adjusted values.', 'info');
                 }
@@ -210,12 +238,13 @@
         }
 
         function processAndStoreChartData(eventData) {
+            // ... (same as before)
             if (calibrationState !== 'complete') return;
             const nowLabel = new Date().toLocaleTimeString().split(" ")[0];
             
             ['alpha', 'beta', 'gamma', 'webkitCompassHeading'].forEach(key => {
                 let rawValue = eventData[key];
-                lastRawValues[key] = rawValue; // Store latest raw value
+                lastRawValues[key] = rawValue;
                 if (rawValue === null || typeof rawValue === 'undefined') return;
 
                 let adjustedValue;
@@ -236,7 +265,8 @@
         }
         
         function handleDeviceOrientation(event) {
-            if (!orientationSensorActive) {
+            // ... (same as before)
+             if (!orientationSensorActive) {
                 logMessage(`First ${orientationEventListenerType || 'deviceorientation'} event received.`, 'info');
                 orientationSensorActive = true;
                 if (!detailDisplayUpdateLoopId) startDetailDisplayUpdateLoop();
@@ -252,7 +282,8 @@
 
         // --- Detailed Value Display Loop ---
         function updateDetailedValueDisplay() {
-            if (calibrationState === 'pending') return; // Don't display until at least calibration starts or raw available
+            // ... (same as before)
+            if (calibrationState === 'pending') return;
 
             const selectedOptionText = sensorSelect.options[sensorSelect.selectedIndex].text;
             detailedValueLabelEl.textContent = selectedOptionText.replace('(Zero-Adjusted)', '').trim();
@@ -277,13 +308,14 @@
         }
 
         function detailDisplayLoop(timestamp) {
-            if (timestamp - lastDetailDisplayUpdateTime >= DETAIL_DISPLAY_UPDATE_INTERVAL_MS) {
+            if (timestamp - lastDetailDisplayUpdateTime >= detailDisplayUpdateIntervalMs) { // Use variable
                 updateDetailedValueDisplay();
                 lastDetailDisplayUpdateTime = timestamp;
             }
             detailDisplayUpdateLoopId = requestAnimationFrame(detailDisplayLoop);
         }
         function startDetailDisplayUpdateLoop() {
+            // ... (same as before)
             if (detailDisplayUpdateLoopId) cancelAnimationFrame(detailDisplayUpdateLoopId);
             logMessage("Starting detailed value display loop.", "debug");
             lastDetailDisplayUpdateTime = performance.now();
@@ -292,6 +324,7 @@
 
         // --- Chart Update Loop ---
         function updateOrientationChart() {
+            // ... (same Y-axis freeze logic as before)
             if (!orientationChart || calibrationState !== 'complete' || !chartData[currentChartKey]) return;
 
             const data = chartData[currentChartKey];
@@ -299,15 +332,14 @@
             orientationChart.data.datasets[0].data = data.values;
             orientationChart.data.datasets[0].label = `Zero-Adjusted ${sensorSelect.options[sensorSelect.selectedIndex].text}`;
 
-            // Y-axis freeze logic
             if (!yAxisFrozen && chartStartTime && (Date.now() - chartStartTime > Y_AXIS_FREEZE_DELAY_S * 1000)) {
-                if (data.values.length > 1) { // Need at least a couple of points to determine range
+                if (data.values.length > 1) {
                     let currentMin = Math.min(...data.values);
                     let currentMax = Math.max(...data.values);
                     let range = currentMax - currentMin;
-                    if (range === 0) range = 10; // Avoid zero range, give some padding
+                    if (range === 0) range = 10;
 
-                    frozenYMin = currentMin - range * 0.1; // Add 10% padding
+                    frozenYMin = currentMin - range * 0.1;
                     frozenYMax = currentMax + range * 0.1;
                     
                     orientationChart.options.scales.y.min = frozenYMin;
@@ -318,22 +350,23 @@
             } else if (yAxisFrozen) {
                 orientationChart.options.scales.y.min = frozenYMin;
                 orientationChart.options.scales.y.max = frozenYMax;
-            } else { // Before freezing, let it auto-scale
+            } else {
                  orientationChart.options.scales.y.min = undefined;
                  orientationChart.options.scales.y.max = undefined;
             }
 
-            orientationChart.update('none'); // 'none' for no animation to prevent flicker with scale changes
+            orientationChart.update('none');
         }
         
         function chartLoop(timestamp) {
-            if (calibrationState === 'complete' && timestamp - lastChartUpdateTime >= CHART_UPDATE_INTERVAL_MS) {
+            if (calibrationState === 'complete' && timestamp - lastChartUpdateTime >= chartUpdateIntervalMs) { // Use variable
                 updateOrientationChart();
                 lastChartUpdateTime = timestamp;
             }
             chartUpdateLoopId = requestAnimationFrame(chartLoop);
         }
         function startChartUpdateLoop() {
+            // ... (same as before)
             if (chartUpdateLoopId) cancelAnimationFrame(chartUpdateLoopId);
             logMessage("Starting chart update loop.", "debug");
             lastChartUpdateTime = performance.now();
@@ -342,23 +375,38 @@
         
         // --- Event Listeners & Init ---
         sensorSelect.addEventListener('change', (e) => {
+            // ... (same Y-axis reset as before)
             currentChartKey = e.target.value;
             chartTitleEl.textContent = `Zero-Adjusted ${e.target.options[e.target.selectedIndex].text}`;
             logMessage(`View changed to: ${currentChartKey}`, 'info');
             
-            // Reset Y-axis freeze when sensor type changes
             yAxisFrozen = false;
             frozenYMin = null;
             frozenYMax = null;
-            if (orientationChart) { // Ensure chart exists
+            if (orientationChart) {
                 orientationChart.options.scales.y.min = undefined;
                 orientationChart.options.scales.y.max = undefined;
             }
-            chartStartTime = Date.now(); // Reset chart start time for new sensor
+            chartStartTime = Date.now();
             
             updateDetailedValueDisplay(); 
             updateOrientationChart(); 
         });
+
+        detailIntervalSlider.addEventListener('input', (e) => {
+            detailDisplayUpdateIntervalMs = parseInt(e.target.value);
+            detailIntervalValueEl.textContent = `${detailDisplayUpdateIntervalMs} ms`;
+            logMessage(`Detailed values update interval set to: ${detailDisplayUpdateIntervalMs} ms`, 'info');
+            // The loop will pick up the new interval on its next check
+        });
+
+        chartIntervalSlider.addEventListener('input', (e) => {
+            chartUpdateIntervalMs = parseInt(e.target.value);
+            chartIntervalValueEl.textContent = `${chartUpdateIntervalMs} ms`;
+            logMessage(`Chart update interval set to: ${chartUpdateIntervalMs} ms`, 'info');
+            // The loop will pick up the new interval on its next check
+        });
+
 
         function requestOrientationPermission() {
             // ... (same as previous version)
@@ -370,12 +418,7 @@
                         if (permissionState === 'granted') {
                             orientationEventListenerType = 'deviceorientationabsolute';
                             window.addEventListener('deviceorientationabsolute', handleDeviceOrientation, true);
-                            window.addEventListener('deviceorientation', (e) => {
-                                if (orientationEventListenerType !== 'deviceorientationabsolute' || !orientationSensorActive) {
-                                    orientationEventListenerType = 'deviceorientation';
-                                }
-                                handleDeviceOrientation(e);
-                            }, true);
+                            window.addEventListener('deviceorientation', (e) => { if (orientationEventListenerType !== 'deviceorientationabsolute' || !orientationSensorActive) orientationEventListenerType = 'deviceorientation'; handleDeviceOrientation(e); }, true);
                             permissionSection.classList.add('hidden');
                         } else { logMessage('Orientation sensor permission denied by user.', 'error'); alert('Permission denied.');}
                     })
@@ -390,17 +433,22 @@
         }
 
         window.addEventListener('load', () => {
-            // ... (same setup, ensure DOM elements are ready)
             logMessage('App loaded. HTTPS: ' + (location.protocol === "https:" ? "Yes" : "No - Sensors may not work!"), 'info');
             orientationChart = createChart();
             currentChartKey = sensorSelect.value;
             chartTitleEl.textContent = `Zero-Adjusted ${sensorSelect.options[sensorSelect.selectedIndex].text}`;
-            updateDetailedValueDisplay(); // Initial call for labels
+            
+            // Initialize slider display values
+            detailIntervalValueEl.textContent = `${detailIntervalSlider.value} ms`;
+            chartIntervalValueEl.textContent = `${chartIntervalSlider.value} ms`;
+            
+            updateDetailedValueDisplay(); 
 
             requestPermissionButton.addEventListener('click', requestOrientationPermission);
 
             document.addEventListener('visibilitychange', () => {
-                if (document.hidden) {
+                // ... (same visibility handling as before)
+                 if (document.hidden) {
                     if (detailDisplayUpdateLoopId) cancelAnimationFrame(detailDisplayUpdateLoopId); detailDisplayUpdateLoopId = null;
                     if (chartUpdateLoopId) cancelAnimationFrame(chartUpdateLoopId); chartUpdateLoopId = null;
                 } else {
