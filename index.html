@@ -15,6 +15,15 @@
 <body>
     <h1>Hello, base PWA!</h1>
 
+    <div>
+        <h2>Device Orientation Data (includes magnetic info)</h2>
+        <button id="request-sensor-permission">Enable Sensor Access</button>
+        <p>Alpha (Compass): <span id="orientation-alpha">N/A</span></p>
+        <p>Beta (Tilt Front/Back): <span id="orientation-beta">N/A</span></p>
+        <p>Gamma (Tilt Left/Right): <span id="orientation-gamma">N/A</span></p>
+        <p id="orientation-error" style="color: red;"></p>
+    </div>
+
     <script src="/scripts.js"></script>
 </body>
 </html>
