@@ -2,463 +2,254 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Configurable Orientation Visualizer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+    <!-- ================== PWA & iOS META TAGS (NEW) ================== -->
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="manifest.json">
+
+    <!-- Theme Color for Browser UI (Android) -->
+    <meta name="theme-color" content="#3498db">
+
+    <!-- iOS Specific Meta Tags for "Add to Home Screen" -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-
+    <meta name="apple-mobile-web-app-title" content="Stock Gaps">
+    <link rel="apple-touch-icon" href="images/icons/icon-192x192.png">
+    <!-- =============================================================== -->
+    
+    <title>Stock Weekly Gap Detector</title>
+    
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif; margin: 0; padding: 10px; background-color: #f0f0f0; color: #333; overscroll-behavior-y: contain; font-size: 14px; }
-        .container { display: flex; flex-direction: column; gap: 12px; }
-        .permission-section, .calibration-notice, .detailed-values-display, .controls, .chart-container, .logs, .interval-controls {
-            text-align: center; padding: 12px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 12px;
-        }
-        .detailed-values-display { text-align: left; }
-        .detailed-values-display h3 { margin-top: 0; font-size: 1.1em; color: #007bff; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px;}
-        .value-grid { display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; align-items: center; }
-        .value-grid strong { font-weight: normal; color: #555; text-align: right; }
-        .value-grid span { font-family: "SF Mono", Menlo, Monaco, monospace; font-weight: bold; color: #333; word-break: break-all; }
-
-        .controls label, .interval-controls label { margin-bottom: 5px; font-weight: bold; display: block; font-size: 0.9em; }
-        .controls select { padding: 8px; border-radius: 5px; border: 1px solid #ccc; font-size: 0.9em; box-sizing: border-box; width: 100%; max-width: 280px; margin: 0 auto; }
+        /* CSS styles are unchanged */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f7f9; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: auto; background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 20px; }
+        p.subtitle { text-align: center; margin-top: -15px; margin-bottom: 25px; color: #555; }
         
-        .interval-controls .slider-container { margin-bottom: 10px; }
-        .interval-controls input[type="range"] { width: 80%; max-width: 250px; margin: 0 5px; vertical-align: middle;}
-        .interval-controls .interval-value { font-size: 0.9em; font-family: monospace; min-width: 50px; display: inline-block; text-align: left;}
+        .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px; align-items: end; }
+        .input-group { display: flex; flex-direction: column; }
+        .input-group label { margin-bottom: 5px; font-size: 14px; color: #555; }
+        .input-group input[type="text"], .input-group input[type="date"] { padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
+        
+        .button-group { display: flex; gap: 10px; flex-wrap: wrap; }
+        .button-group button { padding: 10px 15px; font-size: 14px; color: white; border: none; border-radius: 4px; cursor: pointer; transition: background-color 0.3s; }
+        #fetchButton { background-color: #3498db; flex-grow: 1; font-size: 16px; }
+        #fetchButton:hover { background-color: #2980b9; }
+        #resetViewButton { background-color: #7f8c8d; }
+        #resetViewButton:hover { background-color: #6c7a7b; }
+        
+        .chart-container { position: relative; height: 450px; width: 100%; margin-bottom: 25px; }
+        #frequencyChartContainer { position: relative; height: 300px; width: 100%; margin-bottom: 25px; display: none; }
+        
+        .table-container { max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 25px; }
+        #stockTable { width: 100%; border-collapse: collapse; }
+        #stockTable th, #stockTable td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        #stockTable th { background-color: #ecf0f1; color: #2c3e50; position: sticky; top: 0; z-index: 10; }
+        
+        tr.gap-up { background-color: #e6ffed !important; font-weight: bold; }
+        tr.gap-down { background-color: #ffebee !important; font-weight: bold; }
+        .gap-info { font-style: italic; font-size: 0.9em; color: #333; }
+        
+        h2 { margin-top: 20px; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; }
+        .results-container { background-color: #fdfdfd; border: 1px solid #eee; padding: 20px; border-radius: 5px; margin-bottom: 25px; }
+        #gapsList { list-style-type: none; padding-left: 0; max-height: 200px; overflow-y: auto; }
+        #gapsList li { padding: 8px; border-bottom: 1px solid #ecf0f1; display: flex; justify-content: space-between; align-items: center; }
+        #gapsList li:last-child { border-bottom: none; }
+        .gap-up-text { color: #27ae60; font-weight: bold; }
+        .gap-down-text { color: #c0392b; font-weight: bold; }
 
+        #statsContainer { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+        #statsContainer h3 { margin: 10px 0 5px 0; text-align: center; color: #34495e; }
+        #statsContainer p { font-size: 1.1em; text-align: center; color: #2c3e50; background-color: #ecf0f1; padding: 10px; border-radius: 4px; margin: 0; }
+        #statsContainer ul { list-style: none; padding: 0; margin: 0; }
+        #statsContainer li { padding: 8px; border-radius: 4px; margin-bottom: 5px; border: 1px solid transparent; font-size: 0.95em; display: flex; justify-content: space-between; align-items: center; }
+        #statsContainer li.gap-up-text { background-color: #e6ffed; border-color: #d6f5e0; }
+        #statsContainer li.gap-down-text { background-color: #ffebee; border-color: #f8dde0; }
 
-        .chart-container h3 { margin-top: 0; margin-bottom: 8px; font-size: 1.1em; }
-        .permission-section button { padding: 10px 18px; border-radius: 5px; border: none; font-size: 0.9em; background-color: #007bff; color: white; cursor: pointer; }
-        .permission-section button:hover { background-color: #0056b3; }
-
-        .logs h3 { margin-top: 0; }
-        .log-area { max-height: 100px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; font-size: 0.75em; background-color: #f9f9f9; white-space: pre-wrap; text-align: left; }
-        .log-entry.error { color: red; font-weight: bold; }
-        .log-entry.warn { color: orange; }
-        .log-entry.debug { color: blue; }
-        .log-entry.info { color: green; }
-        .hidden { display: none !important; }
+        .logs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .log-box { background-color: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; font-family: "Courier New", Courier, monospace; font-size: 14px; height: 150px; overflow-y: auto; white-space: pre-wrap; }
+        .log-box h3 { margin-top: 0; border-bottom: 1px solid #7f8c8d; padding-bottom: 5px; color: #ffffff; }
     </style>
 </head>
 <body>
+
     <div class="container">
-        <h1>Configurable Orientation Visualizer</h1>
+        <!-- The body content remains unchanged -->
+        <h1>Weekly Stock Price Gap Detector</h1>
+        <p class="subtitle">Enter a stock ticker from <a href="https://stooq.com" target="_blank">Stooq.com</a> (e.g., <strong>aapl.us</strong>, <strong>tsla.us</strong>, <strong>msft.us</strong>)</p>
 
-        <div id="permissionSection" class="permission-section">
-            <p>This app requires access to your device's orientation sensors.</p>
-            <button id="requestPermissionButton">Grant Orientation Sensor Access</button>
+        <div class="input-grid">
+            <div class="input-group"><label for="tickerInput">Stock Ticker</label><input type="text" id="tickerInput" placeholder="e.g., aapl.us" value="tsla.us"></div>
+            <div class="button-group"><button id="fetchButton">Find Weekly Gaps</button><button id="resetViewButton" title="Reset chart zoom">Reset View</button></div>
+            <div class="input-group"><label for="startDateInput">Start Date (Optional)</label><input type="date" id="startDateInput"></div>
+            <div class="input-group"><label for="endDateInput">End Date (Optional)</label><input type="date" id="endDateInput"></div>
         </div>
 
-        <div id="calibrationNotice" class="calibration-notice hidden">
-            <p id="calibrationText">Initializing calibration...</p>
-        </div>
-
-        <div id="detailedValuesDisplay" class="detailed-values-display hidden">
-            <h3>Detailed Values for <span id="detailedValueLabel">Alpha</span>:</h3>
-            <div class="value-grid">
-                <strong>Raw Value:</strong> <span id="currentRawValue">---</span>
-                <strong>Zero Offset:</strong> <span id="currentZeroOffset">---</span>
-                <strong>Zero-Adjusted Value:</strong> <span id="currentAdjustedValue">---</span>
-            </div>
+        <div class="chart-container"><canvas id="stockChart"></canvas></div>
+        <div id="frequencyChartContainer">
+            <h2>Gap Fill Time Distribution</h2>
+            <canvas id="frequencyChart"></canvas>
         </div>
         
-        <div id="intervalControls" class="interval-controls hidden">
-            <h3>Update Intervals:</h3>
-            <div class="slider-container">
-                <label for="detailIntervalSlider">Detailed Values Update (ms):</label>
-                <input type="range" id="detailIntervalSlider" min="100" max="2000" step="50" value="200">
-                <span class="interval-value" id="detailIntervalValue">200 ms</span>
-            </div>
-            <div class="slider-container">
-                <label for="chartIntervalSlider">Chart Update (ms):</label>
-                <input type="range" id="chartIntervalSlider" min="200" max="5000" step="100" value="500">
-                <span class="interval-value" id="chartIntervalValue">500 ms</span>
-            </div>
+        <div class="results-container">
+            <div id="statsContainer"></div>
+            <h2>Detected Gaps Summary</h2>
+            <ul id="gapsList"></ul>
         </div>
-
-
-        <div id="mainContent" class="hidden">
-            <div class="controls">
-                <label for="sensorSelect">Select Data Source:</label>
-                <select id="sensorSelect">
-                    <option value="alpha">Alpha (Compass/Z-axis)</option>
-                    <option value="beta">Beta (X-axis)</option>
-                    <option value="gamma">Gamma (Y-axis)</option>
-                    <option value="webkitCompassHeading">WebKit Compass Heading</option>
-                </select>
-            </div>
-
-            <div class="chart-container">
-                <h3 id="chartTitle">Zero-Adjusted Alpha</h3>
-                <canvas id="orientationChart"></canvas>
-            </div>
+        
+        <div class="table-container">
+            <table id="stockTable"><thead><tr><th>Date</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Gap Info</th></tr></thead><tbody id="stockTableBody"></tbody></table>
         </div>
-
-        <div class="logs">
-            <h3>Event & Error Logs</h3>
-            <div id="logArea" class="log-area"></div>
+        
+        <div class="logs-grid">
+            <div><pre id="eventLog" class="log-box"><h3>Event Log</h3>Awaiting user input...</pre></div>
+            <div><pre id="errorLog" class="log-box"><h3>Error Log</h3>No errors.</pre></div>
         </div>
     </div>
 
     <script>
-        const MAX_CHART_POINTS = 100;
-        const CALIBRATION_DURATION_S = 20;
-        const Y_AXIS_FREEZE_DELAY_S = 3;
-
-        // DOM Elements
-        const logArea = document.getElementById('logArea');
-        const permissionSection = document.getElementById('permissionSection');
-        const requestPermissionButton = document.getElementById('requestPermissionButton');
-        const calibrationNotice = document.getElementById('calibrationNotice');
-        const calibrationText = document.getElementById('calibrationText');
-        const detailedValuesDisplayDiv = document.getElementById('detailedValuesDisplay');
-        const detailedValueLabelEl = document.getElementById('detailedValueLabel');
-        const currentRawValueEl = document.getElementById('currentRawValue');
-        const currentZeroOffsetEl = document.getElementById('currentZeroOffset');
-        const currentAdjustedValueEl = document.getElementById('currentAdjustedValue');
-        const intervalControlsDiv = document.getElementById('intervalControls'); // New
-        const detailIntervalSlider = document.getElementById('detailIntervalSlider'); // New
-        const detailIntervalValueEl = document.getElementById('detailIntervalValue'); // New
-        const chartIntervalSlider = document.getElementById('chartIntervalSlider'); // New
-        const chartIntervalValueEl = document.getElementById('chartIntervalValue'); // New
-        const mainContent = document.getElementById('mainContent');
-        const sensorSelect = document.getElementById('sensorSelect');
-        const chartTitleEl = document.getElementById('chartTitle');
+        // All the previous JS code for chart and gap logic remains here...
+        // ... (previous script content is unchanged)
+        // --- Element References ---
+        const tickerInput = document.getElementById('tickerInput');
+        const fetchButton = document.getElementById('fetchButton');
+        const eventLog = document.getElementById('eventLog');
+        const errorLog = document.getElementById('errorLog');
+        const tableBody = document.getElementById('stockTableBody');
+        const gapsList = document.getElementById('gapsList');
+        const chartCanvas = document.getElementById('stockChart');
+        const resetViewButton = document.getElementById('resetViewButton');
+        const startDateInput = document.getElementById('startDateInput');
+        const endDateInput = document.getElementById('endDateInput');
+        const statsContainer = document.getElementById('statsContainer');
+        const frequencyChartContainer = document.getElementById('frequencyChartContainer');
+        const frequencyCanvas = document.getElementById('frequencyChart');
         
-        let orientationChart;
-        let currentChartKey = 'alpha';
+        // --- State Variables ---
+        let chartInstance = null;
+        let frequencyChartInstance = null;
+        let baseAnnotations = []; 
 
-        // Calibration and Data
-        let calibrationState = 'pending';
-        let calibrationStartTime;
-        let tempCalibrationData = { alpha: [], beta: [], gamma: [], webkitCompassHeading: [] };
-        let sensorZeroOffsets = { alpha: 0, beta: 0, gamma: 0, webkitCompassHeading: 0 };
+        // --- Core Functions ---
+        function logEvent(message) { const timestamp = new Date().toLocaleTimeString(); eventLog.innerHTML = `<h3>Event Log</h3>[${timestamp}] ${message}\n` + eventLog.innerHTML.replace(/<h3>.*<\/h3>/, ''); }
+        function logError(message) { const timestamp = new Date().toLocaleTimeString(); errorLog.innerHTML = `<h3>Error Log</h3>[${timestamp}] ${message}\n` + errorLog.innerHTML.replace(/<h3>.*<\/h3>/, ''); }
         
-        let chartData = {
-            alpha: { values: [], labels: [] },
-            beta: { values: [], labels: [] },
-            gamma: { values: [], labels: [] },
-            webkitCompassHeading: { values: [], labels: [] }
-        };
-        let lastRawValues = { alpha: null, beta: null, gamma: null, webkitCompassHeading: null };
+        function clearAll() { if (chartInstance) { chartInstance.destroy(); chartInstance = null; } if (frequencyChartInstance) { frequencyChartInstance.destroy(); frequencyChartInstance = null; } baseAnnotations = []; eventLog.innerHTML = '<h3>Event Log</h3>Logs cleared...'; errorLog.innerHTML = '<h3>Error Log</h3>No errors.'; tableBody.innerHTML = ''; gapsList.innerHTML = '<li style="color: #777;">Ready for new analysis.</li>'; statsContainer.innerHTML = ''; frequencyChartContainer.style.display = 'none'; }
 
-        // Chart Y-axis freeze logic
-        let chartStartTime = null;
-        let yAxisFrozen = false;
-        let frozenYMin = null;
-        let frozenYMax = null;
-
-        // Throttling and Sensor State
-        let orientationSensorActive = false;
-        let orientationEventListenerType = null;
-        let lastSensorEventData = null;
-        
-        let detailDisplayUpdateIntervalMs = parseInt(detailIntervalSlider.value); // From slider
-        let lastDetailDisplayUpdateTime = 0;
-        let detailDisplayUpdateLoopId = null;
-
-        let chartUpdateIntervalMs = parseInt(chartIntervalSlider.value); // From slider
-        let lastChartUpdateTime = 0;
-        let chartUpdateLoopId = null;
-
-        function logMessage(message, type = 'info') {
-            const entry = document.createElement('div');
-            entry.classList.add('log-entry', type);
-            entry.textContent = `[${new Date().toLocaleTimeString()}] ${type.toUpperCase()}: ${message}`;
-            logArea.appendChild(entry);
-            logArea.scrollTop = logArea.scrollHeight;
-        }
-
-        function formatSensorValue(value, precision = 8) {
-            if (value === null || typeof value === 'undefined') return '---';
-            if (typeof value === 'boolean') return value.toString();
-            if (typeof value === 'number') {
-                if (isNaN(value) || !isFinite(value)) return value.toString();
-                return value.toFixed(precision);
-            }
-            return String(value);
-        }
-
-        function createChart() {
-             // ... (same as before)
-            const ctx = document.getElementById('orientationChart').getContext('2d');
-            return new Chart(ctx, {
-                type: 'line',
-                data: { labels: [], datasets: [{ label: 'Zero-Adjusted Value', data: [], borderColor: 'rgb(0, 123, 255)', tension: 0.1, fill: false }] },
-                options: {
-                    responsive: true, maintainAspectRatio: true,
-                    scales: {
-                        x: { title: { display: true, text: 'Time' } },
-                        y: { title: { display: true, text: 'Adjusted Value' }, min: undefined, max: undefined }
-                    },
-                    animation: { duration: 0 }
-                }
-            });
-        }
-
-        function handleCalibrationLogic(eventData) {
-            // ... (same as before)
-            if (calibrationState === 'pending' && orientationSensorActive) {
-                calibrationState = 'collecting';
-                calibrationStartTime = Date.now();
-                calibrationNotice.classList.remove('hidden');
-                detailedValuesDisplayDiv.classList.remove('hidden');
-                intervalControlsDiv.classList.remove('hidden'); // Show interval controls
-                logMessage(`Calibration started. Collecting data for ${CALIBRATION_DURATION_S} seconds. Keep device relatively still.`, 'info');
-            }
-
-            if (calibrationState === 'collecting') {
-                const elapsedS = (Date.now() - calibrationStartTime) / 1000;
-                calibrationText.textContent = `Calibrating... Keep device still. ${Math.max(0, CALIBRATION_DURATION_S - elapsedS).toFixed(0)}s remaining. Samples: ${tempCalibrationData.alpha.length}`;
-
-                if (eventData.alpha !== null) tempCalibrationData.alpha.push(eventData.alpha);
-                if (eventData.beta !== null) tempCalibrationData.beta.push(eventData.beta);
-                if (eventData.gamma !== null) tempCalibrationData.gamma.push(eventData.gamma);
-                if (eventData.webkitCompassHeading !== null) tempCalibrationData.webkitCompassHeading.push(eventData.webkitCompassHeading);
-
-                if (elapsedS >= CALIBRATION_DURATION_S) {
-                    calibrationState = 'complete';
-                    ['alpha', 'beta', 'gamma', 'webkitCompassHeading'].forEach(key => {
-                        if (tempCalibrationData[key].length > 0) {
-                            const sum = tempCalibrationData[key].reduce((s, v) => s + v, 0);
-                            sensorZeroOffsets[key] = sum / tempCalibrationData[key].length;
-                        } else { sensorZeroOffsets[key] = 0; }
-                        logMessage(`Zero offset for ${key}: ${formatSensorValue(sensorZeroOffsets[key])} (from ${tempCalibrationData[key].length} samples)`, 'info');
-                        tempCalibrationData[key] = [];
-                    });
-                    calibrationNotice.classList.add('hidden');
-                    mainContent.classList.remove('hidden');
-                    chartStartTime = Date.now();
-                    if (!chartUpdateLoopId) startChartUpdateLoop();
-                    logMessage('Calibration complete. Displaying zero-adjusted values.', 'info');
-                }
-            }
-        }
-
-        function processAndStoreChartData(eventData) {
-            // ... (same as before)
-            if (calibrationState !== 'complete') return;
-            const nowLabel = new Date().toLocaleTimeString().split(" ")[0];
-            
-            ['alpha', 'beta', 'gamma', 'webkitCompassHeading'].forEach(key => {
-                let rawValue = eventData[key];
-                lastRawValues[key] = rawValue;
-                if (rawValue === null || typeof rawValue === 'undefined') return;
-
-                let adjustedValue;
-                if (key === 'alpha' || key === 'webkitCompassHeading') {
-                    adjustedValue = (sensorZeroOffsets[key] - rawValue + 360) % 360;
-                } else {
-                    adjustedValue = sensorZeroOffsets[key] - rawValue;
-                }
-                
-                chartData[key].values.push(adjustedValue);
-                chartData[key].labels.push(nowLabel);
-
-                if (chartData[key].values.length > MAX_CHART_POINTS) {
-                    chartData[key].values.shift();
-                    chartData[key].labels.shift();
-                }
-            });
+        async function fetchAndProcessStockData() {
+            const ticker = tickerInput.value.trim();
+            if (!ticker) { logError("Ticker symbol cannot be empty."); alert("Please enter a ticker symbol."); return; }
+            const startDate = startDateInput.value;
+            const endDate = endDateInput.value;
+            clearAll();
+            tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Fetching weekly data...</td></tr>';
+            logEvent(`Fetching weekly data for ticker: ${ticker}`);
+            const stooqUrl = `https://stooq.com/q/d/l/?s=${ticker.toLowerCase()}&i=w`;
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(stooqUrl)}`;
+            try {
+                const response = await fetch(proxyUrl);
+                if (!response.ok) throw new Error(`Network response was not ok: ${response.status}`);
+                const data = await response.json();
+                const csvText = data.contents;
+                if (!csvText || csvText.includes('No data for')) throw new Error(`No data found for ticker "${ticker}".`);
+                logEvent("Data received, parsing CSV...");
+                const lines = csvText.trim().split('\n').slice(1);
+                const allDataRows = lines.map(line => { const [date, open, high, low, close] = line.split(','); return { date, open: parseFloat(open), high: parseFloat(high), low: parseFloat(low), close: parseFloat(close), gap: null }; }).filter(row => row.date && !isNaN(row.close)).reverse();
+                let dataRowsNewestFirst = allDataRows;
+                if (startDate || endDate) { dataRowsNewestFirst = allDataRows.filter(row => (startDate ? row.date >= startDate : true) && (endDate ? row.date <= endDate : true)); }
+                if (dataRowsNewestFirst.length < 2) throw new Error("Not enough data for analysis in the selected date range.");
+                const { annotatedRows, foundGaps } = detectGaps(dataRowsNewestFirst);
+                logEvent(`Gap analysis complete. Found ${foundGaps.length} weekly gaps.`);
+                calculateAndRenderStats(foundGaps, annotatedRows);
+                renderFrequencyDistributionChart(foundGaps);
+                renderChart(annotatedRows, foundGaps);
+                renderTable(annotatedRows);
+                renderGapsList(foundGaps);
+                logEvent("UI updated successfully.");
+            } catch (error) { logError(error.message); tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">${error.message}</td></tr>`; }
         }
         
-        function handleDeviceOrientation(event) {
-            // ... (same as before)
-             if (!orientationSensorActive) {
-                logMessage(`First ${orientationEventListenerType || 'deviceorientation'} event received.`, 'info');
-                orientationSensorActive = true;
-                if (!detailDisplayUpdateLoopId) startDetailDisplayUpdateLoop();
-            }
-            lastSensorEventData = event;
-
-            if (calibrationState === 'pending' || calibrationState === 'collecting') {
-                handleCalibrationLogic(event);
-            } else if (calibrationState === 'complete') {
-                processAndStoreChartData(event);
-            }
-        }
-
-        // --- Detailed Value Display Loop ---
-        function updateDetailedValueDisplay() {
-            // ... (same as before)
-            if (calibrationState === 'pending') return;
-
-            const selectedOptionText = sensorSelect.options[sensorSelect.selectedIndex].text;
-            detailedValueLabelEl.textContent = selectedOptionText.replace('(Zero-Adjusted)', '').trim();
-
-            let rawVal = lastRawValues[currentChartKey];
-            let zeroOffsetVal = sensorZeroOffsets[currentChartKey];
-            let adjustedVal = null;
-
-            currentRawValueEl.textContent = formatSensorValue(rawVal);
-            currentZeroOffsetEl.textContent = (calibrationState === 'complete') ? formatSensorValue(zeroOffsetVal) : 'Calibrating...';
-            
-            if (calibrationState === 'complete' && rawVal !== null) {
-                if (currentChartKey === 'alpha' || currentChartKey === 'webkitCompassHeading') {
-                    adjustedVal = (zeroOffsetVal - rawVal + 360) % 360;
-                } else {
-                    adjustedVal = zeroOffsetVal - rawVal;
-                }
-                currentAdjustedValueEl.textContent = formatSensorValue(adjustedVal);
-            } else {
-                currentAdjustedValueEl.textContent = (calibrationState === 'collecting') ? 'Calibrating...' : '---';
-            }
-        }
-
-        function detailDisplayLoop(timestamp) {
-            if (timestamp - lastDetailDisplayUpdateTime >= detailDisplayUpdateIntervalMs) { // Use variable
-                updateDetailedValueDisplay();
-                lastDetailDisplayUpdateTime = timestamp;
-            }
-            detailDisplayUpdateLoopId = requestAnimationFrame(detailDisplayLoop);
-        }
-        function startDetailDisplayUpdateLoop() {
-            // ... (same as before)
-            if (detailDisplayUpdateLoopId) cancelAnimationFrame(detailDisplayUpdateLoopId);
-            logMessage("Starting detailed value display loop.", "debug");
-            lastDetailDisplayUpdateTime = performance.now();
-            detailDisplayUpdateLoopId = requestAnimationFrame(detailDisplayLoop);
-        }
-
-        // --- Chart Update Loop ---
-        function updateOrientationChart() {
-            // ... (same Y-axis freeze logic as before)
-            if (!orientationChart || calibrationState !== 'complete' || !chartData[currentChartKey]) return;
-
-            const data = chartData[currentChartKey];
-            orientationChart.data.labels = data.labels;
-            orientationChart.data.datasets[0].data = data.values;
-            orientationChart.data.datasets[0].label = `Zero-Adjusted ${sensorSelect.options[sensorSelect.selectedIndex].text}`;
-
-            if (!yAxisFrozen && chartStartTime && (Date.now() - chartStartTime > Y_AXIS_FREEZE_DELAY_S * 1000)) {
-                if (data.values.length > 1) {
-                    let currentMin = Math.min(...data.values);
-                    let currentMax = Math.max(...data.values);
-                    let range = currentMax - currentMin;
-                    if (range === 0) range = 10;
-
-                    frozenYMin = currentMin - range * 0.1;
-                    frozenYMax = currentMax + range * 0.1;
-                    
-                    orientationChart.options.scales.y.min = frozenYMin;
-                    orientationChart.options.scales.y.max = frozenYMax;
-                    yAxisFrozen = true;
-                    logMessage(`Y-axis frozen for ${currentChartKey}. Min: ${formatSensorValue(frozenYMin, 2)}, Max: ${formatSensorValue(frozenYMax, 2)}`, 'info');
-                }
-            } else if (yAxisFrozen) {
-                orientationChart.options.scales.y.min = frozenYMin;
-                orientationChart.options.scales.y.max = frozenYMax;
-            } else {
-                 orientationChart.options.scales.y.min = undefined;
-                 orientationChart.options.scales.y.max = undefined;
-            }
-
-            orientationChart.update('none');
-        }
-        
-        function chartLoop(timestamp) {
-            if (calibrationState === 'complete' && timestamp - lastChartUpdateTime >= chartUpdateIntervalMs) { // Use variable
-                updateOrientationChart();
-                lastChartUpdateTime = timestamp;
-            }
-            chartUpdateLoopId = requestAnimationFrame(chartLoop);
-        }
-        function startChartUpdateLoop() {
-            // ... (same as before)
-            if (chartUpdateLoopId) cancelAnimationFrame(chartUpdateLoopId);
-            logMessage("Starting chart update loop.", "debug");
-            lastChartUpdateTime = performance.now();
-            chartUpdateLoopId = requestAnimationFrame(chartLoop);
-        }
-        
-        // --- Event Listeners & Init ---
-        sensorSelect.addEventListener('change', (e) => {
-            // ... (same Y-axis reset as before)
-            currentChartKey = e.target.value;
-            chartTitleEl.textContent = `Zero-Adjusted ${e.target.options[e.target.selectedIndex].text}`;
-            logMessage(`View changed to: ${currentChartKey}`, 'info');
-            
-            yAxisFrozen = false;
-            frozenYMin = null;
-            frozenYMax = null;
-            if (orientationChart) {
-                orientationChart.options.scales.y.min = undefined;
-                orientationChart.options.scales.y.max = undefined;
-            }
-            chartStartTime = Date.now();
-            
-            updateDetailedValueDisplay(); 
-            updateOrientationChart(); 
-        });
-
-        detailIntervalSlider.addEventListener('input', (e) => {
-            detailDisplayUpdateIntervalMs = parseInt(e.target.value);
-            detailIntervalValueEl.textContent = `${detailDisplayUpdateIntervalMs} ms`;
-            logMessage(`Detailed values update interval set to: ${detailDisplayUpdateIntervalMs} ms`, 'info');
-            // The loop will pick up the new interval on its next check
-        });
-
-        chartIntervalSlider.addEventListener('input', (e) => {
-            chartUpdateIntervalMs = parseInt(e.target.value);
-            chartIntervalValueEl.textContent = `${chartUpdateIntervalMs} ms`;
-            logMessage(`Chart update interval set to: ${chartUpdateIntervalMs} ms`, 'info');
-            // The loop will pick up the new interval on its next check
-        });
-
-
-        function requestOrientationPermission() {
-            // ... (same as previous version)
-            logMessage('Attempting to request orientation sensor permission...', 'info');
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(permissionState => {
-                        logMessage(`Orientation permission state: ${permissionState}`, 'info');
-                        if (permissionState === 'granted') {
-                            orientationEventListenerType = 'deviceorientationabsolute';
-                            window.addEventListener('deviceorientationabsolute', handleDeviceOrientation, true);
-                            window.addEventListener('deviceorientation', (e) => { if (orientationEventListenerType !== 'deviceorientationabsolute' || !orientationSensorActive) orientationEventListenerType = 'deviceorientation'; handleDeviceOrientation(e); }, true);
-                            permissionSection.classList.add('hidden');
-                        } else { logMessage('Orientation sensor permission denied by user.', 'error'); alert('Permission denied.');}
-                    })
-                    .catch(error => { logMessage(`Error requesting orientation permission: ${error.name} - ${error.message}`, 'error'); alert('Error: ' + error.message);});
-            } else if (typeof DeviceOrientationEvent !== 'undefined') {
-                logMessage('DeviceOrientationEvent available (no specific permission API or already granted).', 'info');
-                orientationEventListenerType = 'deviceorientationabsolute';
-                window.addEventListener('deviceorientationabsolute', handleDeviceOrientation, true);
-                window.addEventListener('deviceorientation', (e) => { if (orientationEventListenerType !== 'deviceorientationabsolute' || !orientationSensorActive) orientationEventListenerType = 'deviceorientation'; handleDeviceOrientation(e);}, true);
-                permissionSection.classList.add('hidden');
-            } else {logMessage('DeviceOrientationEvent API not supported.', 'error'); alert('Device Orientation API not supported.');}
-        }
-
-        window.addEventListener('load', () => {
-            logMessage('App loaded. HTTPS: ' + (location.protocol === "https:" ? "Yes" : "No - Sensors may not work!"), 'info');
-            orientationChart = createChart();
-            currentChartKey = sensorSelect.value;
-            chartTitleEl.textContent = `Zero-Adjusted ${sensorSelect.options[sensorSelect.selectedIndex].text}`;
-            
-            // Initialize slider display values
-            detailIntervalValueEl.textContent = `${detailIntervalSlider.value} ms`;
-            chartIntervalValueEl.textContent = `${chartIntervalSlider.value} ms`;
-            
-            updateDetailedValueDisplay(); 
-
-            requestPermissionButton.addEventListener('click', requestOrientationPermission);
-
-            document.addEventListener('visibilitychange', () => {
-                // ... (same visibility handling as before)
-                 if (document.hidden) {
-                    if (detailDisplayUpdateLoopId) cancelAnimationFrame(detailDisplayUpdateLoopId); detailDisplayUpdateLoopId = null;
-                    if (chartUpdateLoopId) cancelAnimationFrame(chartUpdateLoopId); chartUpdateLoopId = null;
-                } else {
-                    if (orientationSensorActive) {
-                        if(!detailDisplayUpdateLoopId) startDetailDisplayUpdateLoop();
-                        if(!chartUpdateLoopId && calibrationState === 'complete') startChartUpdateLoop();
+        function detectGaps(newestFirstRows) {
+            const gaps = [];
+            for (let i = 0; i < newestFirstRows.length - 1; i++) {
+                const currentWeek = newestFirstRows[i];
+                const previousWeek = newestFirstRows[i + 1];
+                let gapInfo = null;
+                if (currentWeek.low > previousWeek.high) { gapInfo = { date: currentWeek.date, type: 'Up', details: `from ${previousWeek.high.toFixed(2)} to ${currentWeek.low.toFixed(2)}`, gapBoundaryPrice: previousWeek.high }; } else if (currentWeek.high < previousWeek.low) { gapInfo = { date: currentWeek.date, type: 'Down', details: `from ${previousWeek.low.toFixed(2)} to ${currentWeek.high.toFixed(2)}`, gapBoundaryPrice: previousWeek.low }; }
+                if (gapInfo) {
+                    gapInfo.isFilled = false;
+                    gapInfo.weeksToFill = null;
+                    for (let j = 0; j < i; j++) {
+                        const futureWeek = newestFirstRows[j];
+                        if ((gapInfo.type === 'Up' && futureWeek.low <= gapInfo.gapBoundaryPrice) || (gapInfo.type === 'Down' && futureWeek.high >= gapInfo.gapBoundaryPrice)) { gapInfo.isFilled = true; gapInfo.weeksToFill = i - j; break; }
                     }
+                    currentWeek.gap = gapInfo;
+                    gaps.push(gapInfo);
                 }
-            });
-        });
+            }
+            return { annotatedRows: newestFirstRows, foundGaps: gaps };
+        }
+
+        function calculateAndRenderStats(foundGaps, newestFirstRows) {
+            let statsHTML = '';
+            const filledGaps = foundGaps.filter(gap => gap.isFilled);
+            if (filledGaps.length > 0) { const totalWeeksToFill = filledGaps.reduce((sum, gap) => sum + gap.weeksToFill, 0); const averageWeeks = totalWeeksToFill / filledGaps.length; statsHTML += `<p><strong>Average Time to Fill a Gap:</strong> ${averageWeeks.toFixed(1)} weeks</p>`; }
+            if (newestFirstRows.length === 0) { statsContainer.innerHTML = statsHTML; return; }
+            const currentPrice = newestFirstRows[0].close;
+            statsHTML += `<p><strong>Current Price:</strong> ${currentPrice.toFixed(2)}</p>`;
+            const unfilledGaps = foundGaps.filter(gap => !gap.isFilled);
+            if (unfilledGaps.length > 0) {
+                statsHTML += '<h3>Unfilled Gap Targets</h3><ul>';
+                unfilledGaps.sort((a, b) => Math.abs(a.gapBoundaryPrice - currentPrice) - Math.abs(b.gapBoundaryPrice - currentPrice));
+                unfilledGaps.forEach(gap => {
+                    const pctDiff = ((gap.gapBoundaryPrice - currentPrice) / currentPrice) * 100;
+                    const sign = pctDiff > 0 ? '+' : '';
+                    const gapClass = pctDiff > 0 ? 'gap-up-text' : 'gap-down-text';
+                    statsHTML += `<li class="${gapClass}"><span>Target: <strong>${gap.gapBoundaryPrice.toFixed(2)}</strong></span><span>(from ${gap.date})</span><span><strong>${sign}${pctDiff.toFixed(2)}%</strong></span></li>`;
+                });
+                statsHTML += '</ul>';
+            } else { statsHTML += '<p>No unfilled gaps found in the selected period.</p>'; }
+            statsContainer.innerHTML = statsHTML;
+        }
+
+        function renderFrequencyDistributionChart(foundGaps) { const filledGaps = foundGaps.filter(gap => gap.isFilled && gap.weeksToFill !== null); if (filledGaps.length === 0) { frequencyChartContainer.style.display = 'none'; return; } const frequencyMap = filledGaps.reduce((acc, gap) => { acc[gap.weeksToFill] = (acc[gap.weeksToFill] || 0) + 1; return acc; }, {}); const sortedWeeks = Object.keys(frequencyMap).map(Number).sort((a, b) => a - b); const labels = sortedWeeks.map(week => `${week} week${week > 1 ? 's' : ''}`); const data = sortedWeeks.map(week => frequencyMap[week]); frequencyChartContainer.style.display = 'block'; if (frequencyChartInstance) { frequencyChartInstance.destroy(); } const ctx = frequencyCanvas.getContext('2d'); frequencyChartInstance = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [{ label: 'Number of Gaps', data: data, backgroundColor: '#27ae60', borderColor: '#2ecc71', borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Time to Fill Gap' } }, y: { beginAtZero: true, title: { display: true, text: 'Frequency (Number of Gaps)' }, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return ` Gaps: ${context.raw}`; } } } } } }); }
+        
+        function renderChart(newestFirstRows, foundGaps) { if (chartInstance) { chartInstance.destroy(); } const chronologicalRows = [...newestFirstRows].reverse(); const labels = chronologicalRows.map(row => row.date); const data = chronologicalRows.map(row => row.close); const lastDate = labels.length > 0 ? labels[labels.length - 1] : null; baseAnnotations = foundGaps.map(gap => ({ type: 'line', yMin: gap.gapBoundaryPrice, yMax: gap.gapBoundaryPrice, xMin: gap.date, xMax: lastDate, borderColor: gap.isFilled ? 'rgba(255, 204, 0, 0.8)' : 'rgba(0, 0, 0, 0.8)', borderWidth: 2, borderDash: [6, 6], label: { content: gap.isFilled ? `Filled Gap ${gap.type}` : `Unfilled Gap ${gap.type}`, position: 'end', backgroundColor: 'rgba(255, 255, 255, 0.8)', color: gap.isFilled ? '#b38f00' : '#333333', font: { weight: 'bold' } } })); const ctx = chartCanvas.getContext('2d'); chartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Weekly Close Price', data: data, borderColor: '#3498db', backgroundColor: 'rgba(52, 152, 219, 0.1)', fill: true, tension: 0.1, pointRadius: 0, }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: '#e7e7e7' } } }, plugins: { legend: { display: false }, annotation: { annotations: baseAnnotations }, zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }, pan: { enabled: true, mode: 'xy', threshold: 5 } } } } }); }
+        
+        function renderTable(newestFirstRows) { tableBody.innerHTML = ''; newestFirstRows.forEach(row => { const tr = document.createElement('tr'); if (row.gap) { const fillStatus = row.gap.isFilled ? `(Filled in ${row.gap.weeksToFill} week${row.gap.weeksToFill > 1 ? 's' : ''})` : '(Unfilled)'; tr.classList.add(row.gap.type === 'Up' ? 'gap-up' : 'gap-down'); tr.innerHTML = `<td>${row.date}</td><td>${row.open.toFixed(2)}</td><td>${row.high.toFixed(2)}</td><td>${row.low.toFixed(2)}</td><td>${row.close.toFixed(2)}</td><td class="gap-info">Gap ${row.gap.type}: ${row.gap.details} <strong>${fillStatus}</strong></td>`; } else { tr.innerHTML = `<td>${row.date}</td><td>${row.open.toFixed(2)}</td><td>${row.high.toFixed(2)}</td><td>${row.low.toFixed(2)}</td><td>${row.close.toFixed(2)}</td><td class="gap-info">—</td>`; } tableBody.appendChild(tr); }); }
+        
+        function renderGapsList(newestFirstGaps) { gapsList.innerHTML = ''; if (newestFirstGaps.length === 0) { gapsList.innerHTML = '<li style="color: #777;">No weekly gaps were detected.</li>'; return; } newestFirstGaps.forEach(gap => { const li = document.createElement('li'); const gapTypeClass = gap.type === 'Up' ? 'gap-up-text' : 'gap-down-text'; const fillStatus = gap.isFilled ? `(Filled in ${gap.weeksToFill} wk)` : '(Unfilled)'; li.innerHTML = `<span>${gap.date}</span><strong class="${gapTypeClass.replace('-text', '')}">Gap ${gap.type} ${fillStatus}</strong><span>${gap.details}</span>`; gapsList.appendChild(li); }); }
+        
+        // --- Event Listeners ---
+        fetchButton.addEventListener('click', fetchAndProcessStockData);
+        tickerInput.addEventListener('keypress', (event) => { if (event.key === 'Enter') fetchAndProcessStockData(); });
+        resetViewButton.addEventListener('click', () => { if (chartInstance) { chartInstance.resetZoom(); logEvent('Chart view has been reset.'); } });
+        
+        // --- Initial State ---
+        clearAll();
     </script>
+    
+    <!-- ================== SERVICE WORKER REGISTRATION SCRIPT (NEW) ================== -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // Use a relative path to sw.js, which is best for GitHub Pages.
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(registration => {
+                        console.log('Service Worker registered successfully:', registration);
+                    })
+                    .catch(registrationError => {
+                        console.log('Service Worker registration failed:', registrationError);
+                    });
+            });
+        }
+    </script>
+    <!-- ============================================================================== -->
+
 </body>
 </html>
