@@ -43,8 +43,36 @@
         #resetViewButton { background-color: #7f8c8d; }
         #resetViewButton:hover { background-color: #6c7a7b; }
         
-        .chart-container { position: relative; height: 450px; width: 100%; margin-bottom: 25px; }
+        .chart-container { position: relative; height: 450px; width: 100%; margin-bottom: 5px; } /* Reduced margin */
         #frequencyChartContainer { position: relative; height: 300px; width: 100%; margin-bottom: 25px; display: none; }
+        
+        /* --- NEW LEGEND STYLES --- */
+        #chartLegend {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 25px;
+            padding: 10px;
+            font-size: 13px;
+            color: #555;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .legend-line {
+            display: inline-block;
+            width: 35px;
+            height: 2px;
+        }
+        .line-filled-up { background-color: blue; }
+        .line-filled-down { background-color: gold; }
+        .line-unfilled-up { background-color: black; }
+        .line-unfilled-down { border-top: 2px dashed black; height: 0; }
+        /* --- END NEW LEGEND STYLES --- */
         
         .table-container { max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 25px; }
         #stockTable { width: 100%; border-collapse: collapse; }
@@ -91,6 +119,15 @@
         </div>
 
         <div class="chart-container"><canvas id="stockChart"></canvas></div>
+        
+        <!-- NEW: Custom Chart Legend -->
+        <div id="chartLegend">
+            <div class="legend-item"><span class="legend-line line-filled-up"></span>Filled Up Gap</div>
+            <div class="legend-item"><span class="legend-line line-filled-down"></span>Filled Down Gap</div>
+            <div class="legend-item"><span class="legend-line line-unfilled-up"></span>Unfilled Up Gap</div>
+            <div class="legend-item"><span class="legend-line line-unfilled-down"></span>Unfilled Down Gap</div>
+        </div>
+        
         <div id="frequencyChartContainer">
             <h2>Gap Fill Time Distribution</h2>
             <canvas id="frequencyChart"></canvas>
@@ -113,8 +150,7 @@
     </div>
 
     <script>
-        // All the previous JS code for chart and gap logic remains here...
-        // ... (previous script content is unchanged)
+        // All JavaScript is unchanged from the previous version
         // --- Element References ---
         const tickerInput = document.getElementById('tickerInput');
         const fetchButton = document.getElementById('fetchButton');
