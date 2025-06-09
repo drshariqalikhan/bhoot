@@ -219,7 +219,103 @@
 
         function renderFrequencyDistributionChart(foundGaps) { const filledGaps = foundGaps.filter(gap => gap.isFilled && gap.weeksToFill !== null); if (filledGaps.length === 0) { frequencyChartContainer.style.display = 'none'; return; } const frequencyMap = filledGaps.reduce((acc, gap) => { acc[gap.weeksToFill] = (acc[gap.weeksToFill] || 0) + 1; return acc; }, {}); const sortedWeeks = Object.keys(frequencyMap).map(Number).sort((a, b) => a - b); const labels = sortedWeeks.map(week => `${week} week${week > 1 ? 's' : ''}`); const data = sortedWeeks.map(week => frequencyMap[week]); frequencyChartContainer.style.display = 'block'; if (frequencyChartInstance) { frequencyChartInstance.destroy(); } const ctx = frequencyCanvas.getContext('2d'); frequencyChartInstance = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [{ label: 'Number of Gaps', data: data, backgroundColor: '#27ae60', borderColor: '#2ecc71', borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Time to Fill Gap' } }, y: { beginAtZero: true, title: { display: true, text: 'Frequency (Number of Gaps)' }, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return ` Gaps: ${context.raw}`; } } } } } }); }
         
-        function renderChart(newestFirstRows, foundGaps) { if (chartInstance) { chartInstance.destroy(); } const chronologicalRows = [...newestFirstRows].reverse(); const labels = chronologicalRows.map(row => row.date); const data = chronologicalRows.map(row => row.close); const lastDate = labels.length > 0 ? labels[labels.length - 1] : null; baseAnnotations = foundGaps.map(gap => ({ type: 'line', yMin: gap.gapBoundaryPrice, yMax: gap.gapBoundaryPrice, xMin: gap.date, xMax: lastDate, borderColor: gap.isFilled ? 'rgba(255, 204, 0, 0.8)' : 'rgba(0, 0, 0, 0.8)', borderWidth: 2, borderDash: [6, 6], label: { content: gap.isFilled ? `Filled Gap ${gap.type}` : `Unfilled Gap ${gap.type}`, position: 'end', backgroundColor: 'rgba(255, 255, 255, 0.8)', color: gap.isFilled ? '#b38f00' : '#333333', font: { weight: 'bold' } } })); const ctx = chartCanvas.getContext('2d'); chartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Weekly Close Price', data: data, borderColor: '#3498db', backgroundColor: 'rgba(52, 152, 219, 0.1)', fill: true, tension: 0.1, pointRadius: 0, }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: '#e7e7e7' } } }, plugins: { legend: { display: false }, annotation: { annotations: baseAnnotations }, zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }, pan: { enabled: true, mode: 'xy', threshold: 5 } } } } }); }
+        function renderChart(newestFirstRows, foundGaps) {
+            if (chartInstance) { chartInstance.destroy(); }
+            const chronologicalRows = [...newestFirstRows].reverse();
+            const labels = chronologicalRows.map(row => row.date);
+            const data = chronologicalRows.map(row => row.close);
+            const lastDate = labels.length > 0 ? labels[labels.length - 1] : null;
+
+            baseAnnotations = foundGaps.map(gap => {
+                const annotation = {
+                    type: 'line',
+                    yMin: gap.gapBoundaryPrice,
+                    yMax: gap.gapBoundaryPrice,
+                    xMin: gap.date,
+                    xMax: lastDate,
+                    borderWidth: 2,
+                    label: {
+                        position: 'end',
+                        backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                        font: { weight: 'bold' }
+                    }
+                };
+
+                if (gap.isFilled) {
+                    if (gap.type === 'Up') {
+                        // Filled Up Gap: blue, solid
+                        annotation.borderColor = 'blue';
+                        annotation.borderDash = [];
+                        annotation.label.content = `Filled Gap Up`;
+                        annotation.label.color = 'blue';
+                    } else { // Down
+                        // Filled Down Gap: yellow, solid
+                        annotation.borderColor = 'gold'; // Using 'gold' for better visibility
+                        annotation.borderDash = [];
+                        annotation.label.content = `Filled Gap Down`;
+                        annotation.label.color = '#b38f00'; // Darker gold for text
+                    }
+                } else { // Unfilled
+                    if (gap.type === 'Up') {
+                        // Unfilled Up Gap: black, solid
+                        annotation.borderColor = 'black';
+                        annotation.borderDash = [];
+                        annotation.label.content = `Unfilled Gap Up`;
+                        annotation.label.color = 'black';
+                    } else { // Down
+                        // Unfilled Down Gap: black, dashed
+                        annotation.borderColor = 'black';
+                        annotation.borderDash = [6, 6];
+                        annotation.label.content = `Unfilled Gap Down`;
+                        annotation.label.color = 'black';
+                    }
+                }
+                return annotation;
+            });
+            
+            const ctx = chartCanvas.getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Weekly Close Price',
+                        data: data,
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { grid: { color: '#e7e7e7' } }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        annotation: {
+                            annotations: baseAnnotations
+                        },
+                        zoom: {
+                            zoom: {
+                                wheel: { enabled: true },
+                                pinch: { enabled: true },
+                                mode: 'xy'
+                            },
+                            pan: {
+                                enabled: true,
+                                mode: 'xy',
+                                threshold: 5
+                            }
+                        }
+                    }
+                }
+            });
+        }
         
         function renderTable(newestFirstRows) { tableBody.innerHTML = ''; newestFirstRows.forEach(row => { const tr = document.createElement('tr'); if (row.gap) { const fillStatus = row.gap.isFilled ? `(Filled in ${row.gap.weeksToFill} week${row.gap.weeksToFill > 1 ? 's' : ''})` : '(Unfilled)'; tr.classList.add(row.gap.type === 'Up' ? 'gap-up' : 'gap-down'); tr.innerHTML = `<td>${row.date}</td><td>${row.open.toFixed(2)}</td><td>${row.high.toFixed(2)}</td><td>${row.low.toFixed(2)}</td><td>${row.close.toFixed(2)}</td><td class="gap-info">Gap ${row.gap.type}: ${row.gap.details} <strong>${fillStatus}</strong></td>`; } else { tr.innerHTML = `<td>${row.date}</td><td>${row.open.toFixed(2)}</td><td>${row.high.toFixed(2)}</td><td>${row.low.toFixed(2)}</td><td>${row.close.toFixed(2)}</td><td class="gap-info">—</td>`; } tableBody.appendChild(tr); }); }
         
