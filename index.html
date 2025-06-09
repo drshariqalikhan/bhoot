@@ -46,7 +46,6 @@
         .chart-container { position: relative; height: 450px; width: 100%; margin-bottom: 5px; } /* Reduced margin */
         #frequencyChartContainer { position: relative; height: 300px; width: 100%; margin-bottom: 25px; display: none; }
         
-        /* --- NEW LEGEND STYLES --- */
         #chartLegend {
             display: flex;
             justify-content: center;
@@ -72,7 +71,6 @@
         .line-filled-down { background-color: gold; }
         .line-unfilled-up { background-color: black; }
         .line-unfilled-down { border-top: 2px dashed black; height: 0; }
-        /* --- END NEW LEGEND STYLES --- */
         
         .table-container { max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 25px; }
         #stockTable { width: 100%; border-collapse: collapse; }
@@ -120,7 +118,6 @@
 
         <div class="chart-container"><canvas id="stockChart"></canvas></div>
         
-        <!-- NEW: Custom Chart Legend -->
         <div id="chartLegend">
             <div class="legend-item"><span class="legend-line line-filled-up"></span>Filled Up Gap</div>
             <div class="legend-item"><span class="legend-line line-filled-down"></span>Filled Down Gap</div>
@@ -150,7 +147,6 @@
     </div>
 
     <script>
-        // All JavaScript is unchanged from the previous version
         // --- Element References ---
         const tickerInput = document.getElementById('tickerInput');
         const fetchButton = document.getElementById('fetchButton');
@@ -200,7 +196,7 @@
                 if (startDate || endDate) { dataRowsNewestFirst = allDataRows.filter(row => (startDate ? row.date >= startDate : true) && (endDate ? row.date <= endDate : true)); }
                 if (dataRowsNewestFirst.length < 2) throw new Error("Not enough data for analysis in the selected date range.");
                 const { annotatedRows, foundGaps } = detectGaps(dataRowsNewestFirst);
-                logEvent(`Gap analysis complete. Found ${foundGaps.length} weekly gaps.`);
+                logEvent(`Gap analysis complete. Found ${foundGaps.length} weekly gaps (>= 0.45%).`);
                 calculateAndRenderStats(foundGaps, annotatedRows);
                 renderFrequencyDistributionChart(foundGaps);
                 renderChart(annotatedRows, foundGaps);
@@ -210,19 +206,53 @@
             } catch (error) { logError(error.message); tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">${error.message}</td></tr>`; }
         }
         
+        // ============================ MODIFIED FUNCTION ============================
         function detectGaps(newestFirstRows) {
             const gaps = [];
+            const MIN_GAP_PERCENTAGE = 0.45; // Define the minimum gap size threshold
+
             for (let i = 0; i < newestFirstRows.length - 1; i++) {
                 const currentWeek = newestFirstRows[i];
                 const previousWeek = newestFirstRows[i + 1];
                 let gapInfo = null;
-                if (currentWeek.low > previousWeek.high) { gapInfo = { date: currentWeek.date, type: 'Up', details: `from ${previousWeek.high.toFixed(2)} to ${currentWeek.low.toFixed(2)}`, gapBoundaryPrice: previousWeek.high }; } else if (currentWeek.high < previousWeek.low) { gapInfo = { date: currentWeek.date, type: 'Down', details: `from ${previousWeek.low.toFixed(2)} to ${currentWeek.high.toFixed(2)}`, gapBoundaryPrice: previousWeek.low }; }
+
+                // Check for Gap Up
+                if (currentWeek.low > previousWeek.high) {
+                    const gapPercentage = ((currentWeek.low - previousWeek.high) / previousWeek.high) * 100;
+                    if (gapPercentage >= MIN_GAP_PERCENTAGE) {
+                        gapInfo = {
+                            date: currentWeek.date,
+                            type: 'Up',
+                            details: `from ${previousWeek.high.toFixed(2)} to ${currentWeek.low.toFixed(2)}`,
+                            gapBoundaryPrice: previousWeek.high,
+                            gapPercentage: gapPercentage.toFixed(2) // Store the percentage
+                        };
+                    }
+                } 
+                // Check for Gap Down
+                else if (currentWeek.high < previousWeek.low) {
+                    const gapPercentage = ((previousWeek.low - currentWeek.high) / previousWeek.low) * 100;
+                    if (gapPercentage >= MIN_GAP_PERCENTAGE) {
+                        gapInfo = {
+                            date: currentWeek.date,
+                            type: 'Down',
+                            details: `from ${previousWeek.low.toFixed(2)} to ${currentWeek.high.toFixed(2)}`,
+                            gapBoundaryPrice: previousWeek.low,
+                            gapPercentage: gapPercentage.toFixed(2) // Store the percentage
+                        };
+                    }
+                }
+
                 if (gapInfo) {
                     gapInfo.isFilled = false;
                     gapInfo.weeksToFill = null;
                     for (let j = 0; j < i; j++) {
                         const futureWeek = newestFirstRows[j];
-                        if ((gapInfo.type === 'Up' && futureWeek.low <= gapInfo.gapBoundaryPrice) || (gapInfo.type === 'Down' && futureWeek.high >= gapInfo.gapBoundaryPrice)) { gapInfo.isFilled = true; gapInfo.weeksToFill = i - j; break; }
+                        if ((gapInfo.type === 'Up' && futureWeek.low <= gapInfo.gapBoundaryPrice) || (gapInfo.type === 'Down' && futureWeek.high >= gapInfo.gapBoundaryPrice)) {
+                            gapInfo.isFilled = true;
+                            gapInfo.weeksToFill = i - j;
+                            break;
+                        }
                     }
                     currentWeek.gap = gapInfo;
                     gaps.push(gapInfo);
@@ -230,6 +260,7 @@
             }
             return { annotatedRows: newestFirstRows, foundGaps: gaps };
         }
+        // =========================================================================
 
         function calculateAndRenderStats(foundGaps, newestFirstRows) {
             let statsHTML = '';
@@ -279,27 +310,23 @@
 
                 if (gap.isFilled) {
                     if (gap.type === 'Up') {
-                        // Filled Up Gap: blue, solid
                         annotation.borderColor = 'blue';
                         annotation.borderDash = [];
                         annotation.label.content = `Filled Gap Up`;
                         annotation.label.color = 'blue';
-                    } else { // Down
-                        // Filled Down Gap: yellow, solid
-                        annotation.borderColor = 'gold'; // Using 'gold' for better visibility
+                    } else { 
+                        annotation.borderColor = 'gold'; 
                         annotation.borderDash = [];
                         annotation.label.content = `Filled Gap Down`;
-                        annotation.label.color = '#b38f00'; // Darker gold for text
+                        annotation.label.color = '#b38f00'; 
                     }
-                } else { // Unfilled
+                } else { 
                     if (gap.type === 'Up') {
-                        // Unfilled Up Gap: black, solid
                         annotation.borderColor = 'black';
                         annotation.borderDash = [];
                         annotation.label.content = `Unfilled Gap Up`;
                         annotation.label.color = 'black';
-                    } else { // Down
-                        // Unfilled Down Gap: black, dashed
+                    } else {
                         annotation.borderColor = 'black';
                         annotation.borderDash = [6, 6];
                         annotation.label.content = `Unfilled Gap Down`;
@@ -353,9 +380,39 @@
             });
         }
         
-        function renderTable(newestFirstRows) { tableBody.innerHTML = ''; newestFirstRows.forEach(row => { const tr = document.createElement('tr'); if (row.gap) { const fillStatus = row.gap.isFilled ? `(Filled in ${row.gap.weeksToFill} week${row.gap.weeksToFill > 1 ? 's' : ''})` : '(Unfilled)'; tr.classList.add(row.gap.type === 'Up' ? 'gap-up' : 'gap-down'); tr.innerHTML = `<td>${row.date}</td><td>${row.open.toFixed(2)}</td><td>${row.high.toFixed(2)}</td><td>${row.low.toFixed(2)}</td><td>${row.close.toFixed(2)}</td><td class="gap-info">Gap ${row.gap.type}: ${row.gap.details} <strong>${fillStatus}</strong></td>`; } else { tr.innerHTML = `<td>${row.date}</td><td>${row.open.toFixed(2)}</td><td>${row.high.toFixed(2)}</td><td>${row.low.toFixed(2)}</td><td>${row.close.toFixed(2)}</td><td class="gap-info">—</td>`; } tableBody.appendChild(tr); }); }
+        // ============================ MODIFIED FUNCTION ============================
+        function renderTable(newestFirstRows) {
+            tableBody.innerHTML = '';
+            newestFirstRows.forEach(row => {
+                const tr = document.createElement('tr');
+                if (row.gap) {
+                    const fillStatus = row.gap.isFilled ? `(Filled in ${row.gap.weeksToFill} week${row.gap.weeksToFill > 1 ? 's' : ''})` : '(Unfilled)';
+                    tr.classList.add(row.gap.type === 'Up' ? 'gap-up' : 'gap-down');
+                    // Added gap percentage to the output
+                    tr.innerHTML = `<td>${row.date}</td><td>${row.open.toFixed(2)}</td><td>${row.high.toFixed(2)}</td><td>${row.low.toFixed(2)}</td><td>${row.close.toFixed(2)}</td><td class="gap-info">Gap ${row.gap.type} (${row.gap.gapPercentage}%): ${row.gap.details} <strong>${fillStatus}</strong></td>`;
+                } else {
+                    tr.innerHTML = `<td>${row.date}</td><td>${row.open.toFixed(2)}</td><td>${row.high.toFixed(2)}</td><td>${row.low.toFixed(2)}</td><td>${row.close.toFixed(2)}</td><td class="gap-info">—</td>`;
+                }
+                tableBody.appendChild(tr);
+            });
+        }
         
-        function renderGapsList(newestFirstGaps) { gapsList.innerHTML = ''; if (newestFirstGaps.length === 0) { gapsList.innerHTML = '<li style="color: #777;">No weekly gaps were detected.</li>'; return; } newestFirstGaps.forEach(gap => { const li = document.createElement('li'); const gapTypeClass = gap.type === 'Up' ? 'gap-up-text' : 'gap-down-text'; const fillStatus = gap.isFilled ? `(Filled in ${gap.weeksToFill} wk)` : '(Unfilled)'; li.innerHTML = `<span>${gap.date}</span><strong class="${gapTypeClass.replace('-text', '')}">Gap ${gap.type} ${fillStatus}</strong><span>${gap.details}</span>`; gapsList.appendChild(li); }); }
+        // ============================ MODIFIED FUNCTION ============================
+        function renderGapsList(newestFirstGaps) {
+            gapsList.innerHTML = '';
+            if (newestFirstGaps.length === 0) {
+                gapsList.innerHTML = '<li style="color: #777;">No weekly gaps (>= 0.45%) were detected.</li>';
+                return;
+            }
+            newestFirstGaps.forEach(gap => {
+                const li = document.createElement('li');
+                const gapTypeClass = gap.type === 'Up' ? 'gap-up-text' : 'gap-down-text';
+                const fillStatus = gap.isFilled ? `(Filled in ${gap.weeksToFill} wk)` : '(Unfilled)';
+                // Added gap percentage to the output
+                li.innerHTML = `<span>${gap.date}</span><strong class="${gapTypeClass.replace('-text', '')}">Gap ${gap.type} (${gap.gapPercentage}%) ${fillStatus}</strong><span>${gap.details}</span>`;
+                gapsList.appendChild(li);
+            });
+        }
         
         // --- Event Listeners ---
         fetchButton.addEventListener('click', fetchAndProcessStockData);
